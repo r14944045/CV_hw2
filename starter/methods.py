@@ -8,7 +8,7 @@ below with functools.partial, so each ablation is just `--method <name>`.
 """
 from functools import partial
 
-from tta import BOSA, CoTTA, NormOnly, RoTTA, Source
+from tta import BOSA, CoTTA, MixTTA, NormOnly, RoTTA, Source
 
 METHODS = {
     # baselines
@@ -40,4 +40,12 @@ METHODS = {
     # 2 * alpha_t > 1 for alpha_t > 0.5 reflects the stats through the source and locks alpha_t at 1 on test.
     "bosa_stable": partial(BOSA, reg=0.5),
     "bosa_stable_nomem": partial(BOSA, reg=0.5, use_memory=False),
+
+    # MixTTA (forward-only) and ablations
+    "mixtta": MixTTA,                                  # alpha=0.2, w=0.5, flip + 4 shifts, LAME
+    "mixtta_w7": partial(MixTTA, alpha=0.4, w=0.7),    # more source statistics, faster tracking
+    "mixtta_nolame": partial(MixTTA, use_lame=False),  # no LAME
+    "mixtta_noaug": partial(MixTTA, flip=False, n_shift=0),  # no flip/shift averaging
+    "mixtta_stats": partial(MixTTA, flip=False, n_shift=0, use_lame=False),  # mixed statistics only
+    "mixtta_lag": partial(MixTTA, update_first=False),  # predict before updating the statistics
 }
