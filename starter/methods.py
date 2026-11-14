@@ -48,4 +48,8 @@ METHODS = {
     "mixtta_noaug": partial(MixTTA, flip=False, n_shift=0),  # no flip/shift averaging
     "mixtta_stats": partial(MixTTA, flip=False, n_shift=0, use_lame=False),  # mixed statistics only
     "mixtta_lag": partial(MixTTA, update_first=False),  # predict before updating the statistics
+    # MixTTA + self-training on the LAME-corrected predictions (BN gamma/beta, Adam 1e-3)
+    "mixtta_st": partial(MixTTA, alpha=0.4, w=0.5, lame_feats="mean", lr=1e-3, train_steps=1),
+    "mixtta_st2": partial(MixTTA, alpha=0.4, w=0.5, lame_feats="mean", lr=1e-3, train_steps=2),
+    "mixtta_st_notrain": partial(MixTTA, alpha=0.4, w=0.5, lame_feats="mean"),  # same, without step 4
 }
