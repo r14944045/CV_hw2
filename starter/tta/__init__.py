@@ -10,15 +10,19 @@
                 augmentation_averaged_logits,              CoTTA
                 low_confidence (anchor gate)
   restore.py    StochasticRestore                          CoTTA
-  augment.py    strong_augment                             CoTTA (also RoTTA's student input)
+  augment.py    strong_augment                             CoTTA (also RoTTA's / BOSA's student input)
+  align.py      AlignedBN2d (adaptive alpha, W2 constraint) BOSA (statistics alignment)
+  sparsify.py   saliency_split, sparse_bn                  BOSA (activation sparsification)
   common.py     forward, set_trainable, constants          shared
 
   baselines.py  Source, NormOnly
   rotta.py      RoTTA  (combines the RoTTA components)
   cotta.py      CoTTA  (combines the CoTTA components)
+  bosa.py       BOSA   (combines the BOSA components)
 """
 from .baselines import NormOnly, Source
+from .bosa import BOSA
 from .cotta import CoTTA
 from .rotta import RoTTA
 
-__all__ = ["Source", "NormOnly", "RoTTA", "CoTTA"]
+__all__ = ["Source", "NormOnly", "RoTTA", "CoTTA", "BOSA"]

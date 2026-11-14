@@ -8,7 +8,7 @@ below with functools.partial, so each ablation is just `--method <name>`.
 """
 from functools import partial
 
-from tta import CoTTA, NormOnly, RoTTA, Source
+from tta import BOSA, CoTTA, NormOnly, RoTTA, Source
 
 METHODS = {
     # baselines
@@ -28,4 +28,16 @@ METHODS = {
     "cotta_norst": partial(CoTTA, restore=False),      # no stochastic restoration
     "cotta_fast": partial(CoTTA, n_aug=4),             # fewer augmentations (90 s budget)
     "cotta_rbn": partial(CoTTA, norm="robust"),        # CoTTA + Robust BN (non-i.i.d. stream)
+
+    # BOSA and ablations (cf. the paper's Table 2)
+    "bosa": BOSA,
+    "bosa_noreg": partial(BOSA, reg=0.0),              # w/o adaptive update constraint (Eqs. 5-7)
+    "bosa_noalign": partial(BOSA, adaptive=False, reg=0.0),  # w/o statistics alignment: fixed alpha=0.05 (RBN)
+    "bosa_nomem": partial(BOSA, use_memory=False),     # w/o balanced memory bank: current batch
+    "bosa_nosparse": partial(BOSA, q=0.0),             # w/o activation sparsification
+    "bosa_ent": partial(BOSA, loss="entropy"),         # w/o self-training: entropy minimisation
+    # deviation from the paper: halve the constraint step (2 * 0.5 * alpha_t <= 1). The literal step
+    # 2 * alpha_t > 1 for alpha_t > 0.5 reflects the stats through the source and locks alpha_t at 1 on test.
+    "bosa_stable": partial(BOSA, reg=0.5),
+    "bosa_stable_nomem": partial(BOSA, reg=0.5, use_memory=False),
 }
