@@ -1,0 +1,58 @@
+[val] 1280/2112  peak VRAM 4476 MiB
+{
+ "split": "val",
+ "n": 2112,
+ "seconds": 12.5,
+ "peak_vram_mib": 4476.0,
+ "vram_ok": true,
+ "torch_max_reserved_mib": 4480.0,
+ "gpu": "NVIDIA GeForce RTX 5090",
+ "torch": "2.13.0+cu129",
+ "python": "3.10.13",
+ "config": {
+  "method": "cotta_norst",
+  "split": "val",
+  "data": "../data",
+  "ckpt": "../source_resnet50_160.pth",
+  "out": "../out/cotta_norst",
+  "seed": 0
+ },
+ "acc": 0.7760416666666666
+}
+[test] 1280/12288  peak VRAM 4476 MiB
+[test] 2560/12288  peak VRAM 4476 MiB
+[test] 3840/12288  peak VRAM 4476 MiB
+[test] 5120/12288  peak VRAM 4476 MiB
+[test] 6400/12288  peak VRAM 4476 MiB
+[test] 7680/12288  peak VRAM 4476 MiB
+[test] 8960/12288  peak VRAM 4476 MiB
+[test] 10240/12288  peak VRAM 4476 MiB
+[test] 11520/12288  peak VRAM 4476 MiB
+{
+ "split": "test",
+ "n": 12288,
+ "seconds": 68.5,
+ "peak_vram_mib": 4476.0,
+ "vram_ok": true,
+ "torch_max_reserved_mib": 4480.0,
+ "gpu": "NVIDIA GeForce RTX 5090",
+ "torch": "2.13.0+cu129",
+ "python": "3.10.13",
+ "config": {
+  "method": "cotta_norst",
+  "split": "test",
+  "data": "../data",
+  "ckpt": "../source_resnet50_160.pth",
+  "out": "../out/cotta_norst",
+  "seed": 0
+ }
+}
+run      : /home/lydia/cv/CV_hw2/out/cotta_norst
+config   : {'method': 'cotta_norst', 'split': 'test', 'data': '../data', 'ckpt': '../source_resnet50_160.pth', 'out': '../out/cotta_norst', 'seed': 0}
+gpu      : NVIDIA GeForce RTX 5090, torch 2.13.0+cu129
+time     : 68.5s (limit 90s on 3090)   peak VRAM: 4476.0 MiB
+val acc  : 0.7760
+WARNING  : run took 68.5s on NVIDIA GeForce RTX 5090; limit is 90s on an RTX 3090, leave margin
+RESULT   : OK
+
+Submit to Kaggle: upload out/cotta_norst/test_pred.csv (or: kaggle competitions submit -c <competition> -f out/cotta_norst/test_pred.csv -m "cotta_norst")

@@ -1,0 +1,21 @@
+[val] 1280/2112  peak VRAM 2886 MiB
+{
+ "split": "val",
+ "n": 2112,
+ "seconds": 4.7,
+ "peak_vram_mib": 2886.0,
+ "vram_ok": true,
+ "torch_max_reserved_mib": 3488.0,
+ "gpu": "NVIDIA GeForce RTX 5090",
+ "torch": "2.13.0+cu129",
+ "python": "3.10.13",
+ "config": {
+  "method": "bosa_noalign",
+  "split": "val",
+  "data": "../data",
+  "ckpt": "../source_resnet50_160.pth",
+  "out": "/tmp/claude-1001/-home-lydia-cv-CV-hw2/4520863a-e8a4-4824-a7f5-c2b01f23043d/scratchpad/out/bosa_noalign",
+  "seed": 0
+ },
+ "acc": 0.646780303030303
+}
