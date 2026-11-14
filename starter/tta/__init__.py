@@ -14,6 +14,7 @@
   align.py      AlignedBN2d (adaptive alpha, W2 constraint) BOSA (statistics alignment)
   sparsify.py   saliency_split, sparse_bn                  BOSA (activation sparsification)
   mixbn.py      MixBN2d (source-mixed tracked statistics)  MixTTA
+                MultiMixBN2d (one tracker per scale)       MixTTA-MS
   lame.py       lame (Laplacian output correction)         LAME (Boudiaf et al., 2022)
   common.py     forward, set_trainable, constants          shared
 
@@ -22,11 +23,13 @@
   cotta.py      CoTTA  (combines the CoTTA components)
   bosa.py       BOSA   (combines the BOSA components)
   mixtta.py     MixTTA (forward-only: mixed statistics + flip/shift averaging + LAME)
+  mixtta_ms.py  MixTTAMS (multi-scale MixTTA + self-training, bf16)
 """
 from .baselines import NormOnly, Source
 from .bosa import BOSA
 from .cotta import CoTTA
 from .mixtta import MixTTA
+from .mixtta_ms import MixTTAMS
 from .rotta import RoTTA
 
-__all__ = ["Source", "NormOnly", "RoTTA", "CoTTA", "BOSA", "MixTTA"]
+__all__ = ["Source", "NormOnly", "RoTTA", "CoTTA", "BOSA", "MixTTA", "MixTTAMS"]

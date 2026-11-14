@@ -8,7 +8,7 @@ below with functools.partial, so each ablation is just `--method <name>`.
 """
 from functools import partial
 
-from tta import BOSA, CoTTA, MixTTA, NormOnly, RoTTA, Source
+from tta import BOSA, CoTTA, MixTTA, MixTTAMS, NormOnly, RoTTA, Source
 
 METHODS = {
     # baselines
@@ -52,4 +52,15 @@ METHODS = {
     "mixtta_st": partial(MixTTA, alpha=0.4, w=0.5, lame_feats="mean", lr=1e-3, train_steps=1),
     "mixtta_st2": partial(MixTTA, alpha=0.4, w=0.5, lame_feats="mean", lr=1e-3, train_steps=2),
     "mixtta_st_notrain": partial(MixTTA, alpha=0.4, w=0.5, lame_feats="mean"),  # same, without step 4
+    # MixTTA-MS (tta/mixtta_ms.py): MixTTA + self-training run at several input sizes (own statistics per
+    # size), fused views, bf16, deterministic cuDNN. Self-training at 160 only. Defaults: sizes (160, 224),
+    # flip + 2 shifts, LAME on T=2-softened probabilities, 3 Adam steps per batch.
+    "mixtta_ms224": MixTTAMS,
+    "mixtta_ms3": partial(MixTTAMS, sizes=(160, 192, 224), steps=2),
+    "mixtta_ms3s3": partial(MixTTAMS, sizes=(160, 192, 224)),
+    # ablations
+    "mixtta_ms224_t1": partial(MixTTAMS, lame_T=1.0),  # mixtta_ms224 without the LAME temperature
+    "mixtta_ms": partial(MixTTAMS, sizes=(160, 192), n_shift=4, lame_T=1.0, steps=2),  # first multi-scale version
+    "mixtta_ms_notrain": partial(MixTTAMS, sizes=(160, 192), n_shift=4, lame_T=1.0, steps=0),
+    "mixtta_bf16": partial(MixTTAMS, sizes=(160,), n_shift=4, lame_T=1.0, steps=2),  # = mixtta_st2 in bf16
 }

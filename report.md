@@ -58,13 +58,16 @@ All runs go through the official harness (`python run.py --method <name> --split
 | `bosa_ent` | Entropy minimisation instead of self-training | 59.19 | +4.64 | 5.0 | 3518 | — |
 | `bosa_stable` | Constraint step halved (2 · 0.5 · α_t ≤ 1); not in the paper | 60.51 | +5.96 | 5.1 | 3006 | — |
 | `bosa_stable_nomem` | `bosa_stable` without memory bank; not in the paper | 79.50 | +24.95 | 4.1 | 2906 | 0.78662 |
-| **MixTTA** (ours, forward-only) | | | | | | |
+| **MixTTA** (ours) | | | | | | |
 | `mixtta` | Source-mixed BN statistics (tracking rate α = 0.2, source weight w = 0.5), updated before predicting + softmax averaged over flip and 4 random shifts + LAME (k = 5) | 89.06 | +34.51 | 3.3 | 1366 | 0.86246 |
 | `mixtta_w7` | α = 0.4, w = 0.7 | 89.49 | +34.94 | 3.3 | 1366 | — |
 | `mixtta_nolame` | No LAME | 86.41 | +31.86 | 3.2 | 1366 | — |
 | `mixtta_noaug` | No flip/shift averaging | 86.93 | +32.38 | 1.5 | 3366 | — |
 | `mixtta_stats` | Mixed statistics only (no averaging, no LAME) | 83.19 | +28.64 | 1.4 | 2150 | — |
 | `mixtta_lag` | Predict with the previous statistics, update afterwards (BOSA / RoTTA order) | 84.66 | +30.11 | 3.6 | 1366 | — |
+| `mixtta_st_notrain` | α = 0.4, w = 0.5; LAME on features averaged over all 6 views (still forward-only) | 90.10 | +35.55 | 4.3 | 2882 | 0.88981 |
+| `mixtta_st` | `mixtta_st_notrain` + self-training: 1 Adam step (lr 1e-3) per batch on BN γ/β, soft cross-entropy to the LAME output on a shifted copy | 91.15 | +36.60 | 5.6 | 3846 | — |
+| `mixtta_st2` | `mixtta_st` with 2 steps per batch | 91.90 | +37.35 | 6.7 | 3798 | 0.91 |
 
 Notes:
 
@@ -74,7 +77,7 @@ Notes:
 
 BOSA notes:
 
-- BOSA (Bai et al., IJCAI 2026) has no official code. The implementation follows the paper's Secs. 4.2–4.4 and its ImageNet-C / ResNet-50 settings: Adam with lr 1e-3, memory capacity 64, q = 0.7, teacher keep rate 0.99. The supplementary material was not available, so these choices are assumptions:
+- The implementation follows the paper's Secs (Bai et al., IJCAI 2026). 4.2–4.4 and its ImageNet-C / ResNet-50 settings: Adam with lr 1e-3, memory capacity 64, q = 0.7, teacher keep rate 0.99. The supplementary material was not available, so these choices are assumptions:
   - the memory bank is RoTTA's CSTU;
   - the paper's momentum v_m is read as the teacher's keep rate;
   - teacher and student each align their own BN statistics on the memory bank.
@@ -95,10 +98,11 @@ MixTTA notes:
   - `bosa_stable_nomem` scores the same with `lr=0` (79.36 %); its gain is the mix of source and test statistics.
   - `cotta_noaug` equals `bn`; CoTTA's gain is the augmentation averaging.
 
-  MixTTA combines forward-only parts and has no gradient updates. For each batch:
+  MixTTA combines forward-only parts (steps 1–3); only the `_st` variants add gradient updates (step 4). For each batch:
   1. Statistics. Every BN layer tracks the test statistics with an EMA (rate α) and normalises with (1 − w) · tracked + w · source statistics. Unlike BOSA, the tracking rate and the pull towards the source are separate settings. The current batch updates the statistics before it is predicted.
   2. Averaging. The softmax is averaged over the batch, its horizontal flip and 4 random flip + shift copies (up to 1/8 of the image, reflection padding). The copies are normalised with the stored statistics and do not update them.
-  3. LAME (Boudiaf et al., CVPR 2022). The averaged probabilities are corrected with a kNN graph (k = 5) on the batch's penultimate features. This exploits the 5–17 classes present in each batch.
+  3. LAME (Boudiaf et al., CVPR 2022). The averaged probabilities are corrected with a kNN graph (k = 5) on the batch's penultimate features (`mixtta_st*`: averaged over all views). This exploits the 5–17 classes present in each batch.
+  4. Self-training (`mixtta_st`, `mixtta_st2` only). After predicting, 1 or 2 Adam steps (lr 1e-3) on the BN scale and shift. The loss is the soft cross-entropy between the LAME-corrected probabilities and the model's output on a random flip + shift copy. Training forwards do not update the statistics.
 - How the settings were chosen. α, w, the augmentation type and k were picked by a grid on val. That grid ran outside the harness, with the same images fed in the same batches of 64. It reproduced the harness's val accuracy exactly for `bn`, `rbn`, `cotta` and `bosa_stable_nomem` at `lr=0`. Each setting ran on 7 stream orders: original, reversed, and the 3 val domains reordered. The 7 orders test robustness to order, not to new domains, so the settings may fit val's 3 domains.
 
   | Method | Mean over 7 orders (%) | Worst order (%) | Scan-line grid / wavy warp / fisheye on black (%) |
@@ -108,15 +112,20 @@ MixTTA notes:
   | `mixtta_stats` | 83.25 | 82.01 | 86.0 / 85.1 / 77.6 |
   | `mixtta` | 88.69 | 87.83 | 91.7 / 91.1 / 82.0 |
   | `mixtta_w7` | 89.53 | 88.45 | 93.4 / 90.8 / 83.1 |
+  | `mixtta_st_notrain` | 89.81 | 88.78 | — |
+  | `mixtta_st` | 90.35 | 89.16 | — |
+  | `mixtta_st2` | 90.89 | 89.68 | — |
+- A labelled proxy for test. Val has 3 domains and test has 12, so I applied synthetic versions of the 11 other test corruptions to 768-image chunks of the val stream. The corruptions were blended 50/50 with the original image, and the chunks keep the val label order. It ranks the 6 methods already scored on Kaggle in almost the same order as Kaggle (Spearman 0.94; only `bn` and `bosa_stable_nomem` swap). It is harder than test (`mixtta`: 74.2 % on the proxy, 86.2 % on Kaggle). It preferred faster tracking (α = 0.4) and view-averaged LAME features (`mixtta_st_notrain`, proxy 78.2 %). Kaggle confirmed the gain: 0.86246 → 0.88981.
+- Self-training carries over to test. `mixtta_st2` scores 0.91 on Kaggle, against 0.88981 for `mixtta_st_notrain`; on val the gains are 1.05 pt (`mixtta_st`) and 1.80 pt (`mixtta_st2`). The proxy could not have predicted this. It reuses each val image about 4 times, and all of its training gain is on repeated images. On an image's first appearance, training is neutral to slightly negative (−0.3 and −0.9 pt). Neither collapses on the test stream (no domain's most-predicted class exceeds 9.2 %). Training all parameters instead (SGD, lr 1e-3) scored 90.31 % on val but collapsed to 33 % on the proxy.
 - Updating the statistics before predicting is worth 4.4 pt (`mixtta_lag` 84.66 → 89.06). With the opposite order, the first batch after each domain shift is normalised with the previous domain's statistics.
 - Strong CoTTA-style augmentations hurt here. Normalised with the stored statistics, they drop the scan-line domain from 86 % to 39–56 %. Normalised with each copy's own statistics, they are still worse than flip alone (83.9 vs 84.6 % mean over 7 orders). Mild flips and shifts help.
 - Label skew. Restricting each batch's predictions to the classes truly present (an oracle) gives 91.0 % mean over 7 orders, against 86.0 % without LAME. LAME with k = 5 reaches 88.7 %. It is sensitive to the graph strength: k = 3 gives 87.7 % and k = 10 gives 85.5 %, no gain. Re-estimating each batch's class prior with EM (3 iterations) gives 88.2 %.
 - Test-stream checks (no labels).
-  - Time: 20–21 s on the RTX 5090. `cotta` takes 68 s and may exceed the 90 s limit on a 3090.
+  - Time on the RTX 5090: 20–21 s for `mixtta` and `mixtta_st_notrain`, 27 s for `mixtta_st`, 33 s for `mixtta_st2`. `cotta` takes 68 s and may exceed the 90 s limit on a 3090.
   - No collapse: I split the 12 test domains by image statistics. In every domain, the most-predicted class has at most 10.6 % of predictions (the source model reaches 100 % on halftone).
   - Agreement: `mixtta` and `mixtta_w7` agree with `cotta` on 75–76 % of test images and with `bosa_stable_nomem` on 79–80 %, more than those two agree with each other (70 %). This rules out collapse but does not estimate accuracy.
   - LAME changes 11.1 % of test predictions and 8.2 % of val predictions. On val, the predictions it changes go from 22 % correct to 55 % correct.
-- Noise. The random shifts move the same configuration between 89.30 % and 89.06 % on val under different random states. The 0.4 pt gap between `mixtta` and `mixtta_w7` is therefore not a real difference. The nvidia-smi peak is noisy: 1366–3426 MiB for the same configuration.
+- Noise. The random shifts move the same configuration between 89.30 % and 89.06 % on val under different random states. The 0.4 pt gap between `mixtta` and `mixtta_w7` is therefore not a real difference. The nvidia-smi peak is noisy: 1366–3426 MiB for the same configuration. The forward-only variants reproduce their test predictions exactly. `mixtta_st2` does not: three test reruns each differed from the submitted file on 9–12 of 12,288 predictions, because the gradient steps amplify GPU nondeterminism.
 
 Why MixTTA outperforms RoTTA and CoTTA:
 
@@ -135,7 +144,7 @@ It handles all three with forward passes only.
 | Uses label skew at prediction | No (the memory bank uses it for training only) | No | Yes (LAME) |
 | Weight updates | BN affine parameters | All parameters | None |
 | Test time, RTX 5090 (s) | 15 | 68 | 21 |
-| Kaggle public | 0.65983 | 0.79117 | 0.86246 |
+| Kaggle public | 0.65983 | 0.79117 | 0.86246 (`mixtta_st_notrain`: 0.88981; `mixtta_st2`: 0.91) |
 
 1. BN statistics (val 83.19 % with this step alone, against 72.16 % for `bn` and 76.23 % for `rbn`).
    - CoTTA normalises with the current batch. With about 10 classes per batch, those statistics are noisy and depend on which classes happen to be present.
@@ -144,7 +153,8 @@ It handles all three with forward passes only.
    - It also updates before predicting. In the RoTTA order, the first batch after each shift is normalised with the previous domain's statistics, which costs 4.4 pt on val (`mixtta_lag`).
 2. Mild averaging (+3.2 pt, to 86.41 %). CoTTA's strong augmentations change image statistics and hurt on this data. Flips and small shifts keep the gain at 6 forward passes per batch instead of CoTTA's 33.
 3. LAME (+2.7 pt, to 89.06 %). Within a batch, similar-looking images should share a label. LAME pushes predictions towards the few classes the batch actually contains.
-4. No training. Self-training brought no gain on this stream; it only adds drift and time. Without it, MixTTA is fast and stable across the 12 domain shifts.
+4. No training in the submitted versions. The weight updates of RoTTA, BOSA and CoTTA brought no gain on this stream, only drift and time. Without them, MixTTA is fast and stable across the 12 domain shifts. Self-training on MixTTA's own LAME-corrected predictions does help. These targets are much more accurate than RoTTA's or CoTTA's pseudo-labels. `mixtta_st2` gains 1.80 pt on val and reaches 0.91 on Kaggle.
+5. Faster tracking and view-averaged LAME features (`mixtta_st_notrain`: +1.0 pt on val, +4.0 pt on the proxy, Kaggle 0.86246 → 0.88981).
 
 Compared with BOSA, MixTTA keeps the mix of source and test statistics but separates the tracking rate from the pull towards the source. In BOSA both are set by one adaptive α_t, and that coupling caused the collapse at α_t ≈ 1.
 
