@@ -69,6 +69,11 @@ METHODS = {
     # + domain-shift detection (tracker reset) and running-mean tracking within a domain (steps 0, 0b)
     "mixtta_ms224s": partial(MixTTAMS, shift_thr=10.0, alpha_min=0.1),  # collapses on test (tree frog)
     "mixtta_ms224sp2": partial(MixTTAMS, shift_thr=10.0, alpha_min=0.1, prior_lambda=2.0),
+    # mixtta_ms224sp2 (Kaggle 0.92724) variants: stronger / faster prior, a third input size, a temporal label prior
+    "mixtta_ms224sp3": partial(MixTTAMS, shift_thr=10.0, alpha_min=0.1, prior_lambda=3.0),
+    "mixtta_ms224sp2f": partial(MixTTAMS, shift_thr=10.0, alpha_min=0.1, prior_lambda=2.0, prior_tau=1000.0),
+    "mixtta_ms3sp2": partial(MixTTAMS, sizes=(160, 192, 224), shift_thr=10.0, alpha_min=0.1, prior_lambda=2.0),
+    "mixtta_ms224sp2t": partial(MixTTAMS, shift_thr=10.0, alpha_min=0.1, prior_lambda=2.0, temporal_mu=0.2),
     # domain-shift reset only: rate 1 on the shift batch, 1/2 on the next, then the usual 0.4
     "mixtta_ms224r": partial(MixTTAMS, shift_thr=10.0, alpha_min=0.4),
     "mixtta_ms224rp2": partial(MixTTAMS, shift_thr=10.0, alpha_min=0.4, prior_lambda=2.0),

@@ -184,6 +184,17 @@ MixTTA-MS: domain-shift reset and class prior (`mixtta_ms224sp2`: Kaggle public 
   - training on the batch before predicting it (+1.2 pt for +70 % time);
   - 5 self-training steps or lr 2e-3 (worse);
   - a per-domain prior at λ = 2 (−2.3 pt).
+- Kaggle decomposition:
+  - the class prior alone (`mixtta_ms224p2`): 0.91585 → 0.92366 (+0.78);
+  - the shift reset with running-mean statistics on top (`mixtta_ms224sp2`): 0.92724 (+0.36, within seed noise).
+  - The proxy had predicted +3.6 and +1.5 pt, so it overstates gains by roughly 4×.
+- Balancing per domain, after the fact and online.
+  - After the fact, with the domain boundaries known and the whole domain balanced at once (Sinkhorn on `mixtta_ms224sp2`'s LAME outputs), val rises from 94.46 to 95.27 % and 3.2 % of the test predictions change.
+  - Online, balancing each batch against the domain seen so far drops val to 79.8–93.7 %. A partial domain is far from class-balanced because of the Dirichlet bursts. A per-domain model bias cannot be separated from that skew until most of the domain has passed, so this gain is not available online.
+- Other ideas that did not help, on top of `mixtta_ms224sp2`:
+  - A prior from the previous batch's predicted classes. Consecutive batches share classes, but this gains at most +0.3 pt on val in simulation, and stronger settings collapse.
+  - Training more parameters: the fc layer, layer4 or layer3 + layer4 at lr 1e-5 is neutral, and layer4 at lr 1e-4 collapses (proxy 67.9 %).
+  - A third input size, 192: val7 93.81 %, proxy 85.00 %.
 
 Why MixTTA outperforms RoTTA and CoTTA:
 

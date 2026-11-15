@@ -46,7 +46,7 @@ from .mixtta import random_shift
 class MixTTAMS:
     def __init__(self, model, alpha=0.4, w=0.5, sizes=(160, 224), flip=True, n_shift=2, knn=5, lame_T=2.0,
                  lr=1e-3, steps=3, train_scale=0, amp=True, deterministic=True, prior_lambda=0.0, prior_tau=2000.0,
-                 shift_thr=0.0, alpha_min=None):
+                 shift_thr=0.0, alpha_min=None, extra_train=(), extra_lr=1e-4, temporal_mu=0.0, temporal_eps=0.1):
         setup_cuda()
         if deterministic:  # fixed cuDNN algorithms: reruns give the same predictions (slower)
             torch.backends.cudnn.benchmark = False
@@ -61,15 +61,20 @@ class MixTTAMS:
         self.counts, self.n_seen = None, 0
         self.alpha, self.shift_thr, self.alpha_min = alpha, shift_thr, alpha_min
         self.dist_hist, self.shifts, self.k_dom, self.t = [], [], 0, 0
+        self.temporal_mu, self.temporal_eps, self.h_prev = temporal_mu, temporal_eps, None
         self.amp = torch.autocast("cuda", dtype=torch.bfloat16, enabled=amp)
         self._feats = None
         self.model.fc.register_forward_hook(lambda m, inp, out: setattr(self, "_feats", inp[0].detach()))
         self.opt = None
         if lr > 0 and steps > 0:
             params = [p for l in self.layers for p in (l.weight, l.bias)]
-            for p in params:
+            # extra_train: names of submodules (e.g. "fc", "layer4") whose remaining weights also train, at extra_lr
+            extra = [p for n in extra_train for name, p in getattr(self.model, n).named_parameters()
+                     if not any(p is q for q in params)]
+            for p in params + extra:
                 p.requires_grad_(True)
-            self.opt = torch.optim.Adam(params, lr=lr)
+            groups = [dict(params=params, lr=lr)] + ([dict(params=extra, lr=extra_lr)] if extra else [])
+            self.opt = torch.optim.Adam(groups, lr=lr)
 
     def _set_tracker(self, k, stat_rows=None, alpha=None):
         for l in self.layers:
@@ -96,6 +101,7 @@ class MixTTAMS:
             ref = sorted(hist)[len(hist) // 2] if len(hist) >= 3 else None
             if ref is not None and d > self.shift_thr * max(ref, 1e-4):
                 self.shifts.append(self.t)
+                self.h_prev = None
                 self.dist_hist, self.k_dom, alpha = [], 0, 1.0
             else:
                 self.dist_hist.append(d)
@@ -136,7 +142,11 @@ class MixTTAMS:
             prob = prob / prob.sum(1, keepdim=True)
         if self.lame_T != 1.0:
             prob = torch.softmax(torch.log(prob + 1e-10) / self.lame_T, 1)
+        if self.temporal_mu and self.h_prev is not None:  # 3c: classes of the previous batch are likely again
+            prob = prob * (self.h_prev + self.temporal_eps).pow(self.temporal_mu)
+            prob = prob / prob.sum(1, keepdim=True)
         z = lame(prob, feats, self.knn)
+        self.h_prev = z.mean(0)
         pred = z.argmax(1)
         self.counts += torch.bincount(pred, minlength=C).float()
         self.n_seen += pred.numel()
