@@ -78,7 +78,9 @@ Upload `out/<method>/test_pred.csv`. Submit `mixtta_ms224p2` first: its score sh
   - Long proxy = the 4 streams back to back (132 batches).
   - Imbalance floor = the minimum error rate implied by the predicted class counts if every test domain is exactly class-balanced, as every val domain is.
   - Reruns with another seed change about 4 % of the test predictions, so `rp2` and `sp2` (3.3 % apart) cannot be ranked offline.
-- The new methods add one conv1 forward per batch to `mixtta_ms224`'s compute. Under the same shared-GPU load, they ran no slower than `mixtta_ms224` (152 and 60 s, against 163 s). The times in their run logs come from that shared GPU and are not representative.
+- **Time.** On a quiet RTX 5090 back to back, `mixtta_ms224rp2` and `mixtta_ms224sp2` take 28.5 s and `mixtta_ms224` takes 28.2 s. Peak VRAM is 4.2 GB.
+  - Those reruns reproduced each file's SHA-256 exactly, and their run logs are the ones in `out/`.
+  - Run time has not been measured on a 3090.
 
 Generated but not submitted (older):
 
