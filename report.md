@@ -29,16 +29,18 @@ It would be fine to copy the figure from the referred paper.
   - Cons:
 
 ## Q2 Method
-Best model: `mixtta_ms224` (`starter/tta/mixtta_ms.py`), Kaggle public 0.91585, val 93.99 %.
+Best model: `mixtta_ms224sp2` (`starter/tta/mixtta_ms.py`), Kaggle public 0.92724, val 94.46 %. The previous best, `mixtta_ms224` (0.91585), is the same method without steps 0 and 3.
 
-- Backbone Model: ResNet-50, the provided 160 px source checkpoint. Every BN layer is replaced by a source-mixed BN layer.
-- Learning rate: 1e-3, constant (Adam)
+- Backbone model: ResNet-50, the provided 160 px source checkpoint. Every BN layer is replaced by a source-mixed BN layer (w = 0.5) with one statistics tracker per input size.
+- Learning rate: 1e-3, constant (Adam), on the BN scale and shift only.
 
 For each batch of 64:
-1. At input sizes 160 and 224, each with its own BN statistics (α = 0.4, w = 0.5): update the statistics with the batch, then average the softmax over the batch, its flip and 2 random flip + shift copies.
-2. Average over both sizes, apply LAME (k = 5, temperature T = 2) and predict the argmax.
-3. Train: soft cross-entropy between the LAME output and the model's output on a shifted copy at 160 px.
-
+0. Domain-shift detection. If the batch's conv1 statistics diverge from the tracked ones by more than 10× the domain's recent median, a new domain starts. The tracked statistics are then replaced by the batch's (tracking rate 1). Within a domain, the k-th batch uses rate max(1/k, 0.1): a running mean of the domain's statistics.
+1. At input sizes 160 and 224, each with its own BN statistics: update the statistics with the batch, then average the softmax over the batch, its flip and 2 random flip + shift copies.
+2. Average over both sizes.
+3. Class prior: divide the probabilities by (20 × the share of each class predicted so far)^2, with a pseudo-count of 2000 images. The test stream is class-balanced overall.
+4. Apply LAME (k = 5, temperature T = 2) and predict the argmax.
+5. Train: soft cross-entropy between the LAME output and the model's output on a shifted copy at 160 px, 3 steps.
 
 ## Experiments
 
@@ -152,7 +154,7 @@ MixTTA notes:
   - LAME changes 11.1 % of test predictions and 8.2 % of val predictions. On val, the predictions it changes go from 22 % correct to 55 % correct.
 - Noise. The random shifts move the same configuration between 89.30 % and 89.06 % on val under different random states. The 0.4 pt gap between `mixtta` and `mixtta_w7` is therefore not a real difference. The nvidia-smi peak is noisy: 1366–3426 MiB for the same configuration. The forward-only variants reproduce their test predictions exactly. `mixtta_st2` does not: three test reruns each differed from the submitted file on 9–12 of 12,288 predictions, because the gradient steps amplify GPU nondeterminism.
 
-MixTTA-MS: domain-shift reset and class prior (`mixtta_ms224rp2`, `mixtta_ms224sp2`; not yet scored on Kaggle):
+MixTTA-MS: domain-shift reset and class prior (`mixtta_ms224sp2`: Kaggle public 0.92724, +1.14 pt over `mixtta_ms224`; `mixtta_ms224rp2` not scored):
 
 - Stream structure.
   - Dynamic-programming segmentation on early-layer statistics splits test into 12 domains of 676–1252 images: low-light noise, wave warp, chromatic blur, thermal colormap, sepia with scratches, pixelation, diagonal stripes, screen grid, teal posterize, two halftones and flat posterize. 7 of the 11 boundaries fall inside a batch.
