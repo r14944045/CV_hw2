@@ -164,7 +164,8 @@ MixTTA-MS: domain-shift reset and class prior (`mixtta_ms224rp2`, `mixtta_ms224s
   - Offline per-domain balancing (Sinkhorn on the LAME output, with oracle boundaries) gains only 0.5 pt on val, where the floors are small.
 - Shift reset (steps 0–0b in `tta/mixtta_ms.py`).
   - The detector compares the KL divergence of the batch's conv1 statistics from the tracked ones with its median over the domain's last 8 batches. Above 10×, the batch's statistics replace the tracked ones.
-  - It fires at all 11 test boundaries plus once inside a domain, and at all val and proxy boundaries.
+  - It fires at all 11 test boundaries plus once inside a domain, and at all val and proxy boundaries. At two test boundaries (batches 35 and 118, where only a few images of the batch belong to the new domain) it fires one batch late.
+  - The threshold of 10 was chosen while looking at the unlabelled test stream's boundaries, as well as val and the proxy.
   - Proxy: +2.1 pt alone. With running-mean statistics inside the domain (rate 1/k, floor 0.1): +3.4 pt.
   - Resetting the BN affine parameters at a shift as well is worse: +0.8 pt.
 - Self-training drift.

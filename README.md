@@ -29,7 +29,12 @@ The file to upload is `out/mixtta_ms224/test_pred.csv`.
 
 The submitted file's SHA-256 is `75b92de51e2742b5f453694b5a7a82f67f0e4b107eb086b31c20c89cd1e567c0`. It was produced with torch 2.13.0+cu129, seed 0, on an RTX 5090.
 
-The method uses deterministic cuDNN algorithms, so a rerun on the same GPU and software reproduces this hash exactly (checked with two reruns). A different GPU or library version (such as the TAs' 3090) gives a slightly different file.
+The method uses deterministic cuDNN algorithms, so a rerun on the same GPU and software reproduces this hash exactly (checked with three reruns). A perturbed run is not close to this file:
+- With seeds 1–3, the test predictions differ on 4.3–11 % of images.
+- Seed 3 drifts into predicting tree frog in the late domains (+1039 predictions).
+- A different GPU or library version, such as the TAs' 3090, is a comparable perturbation.
+
+The class-prior candidates below are stable across seeds 0–3.
 
 `bash tools/run_gpu.sh $METHOD` runs val (prints accuracy) and test, then runs the checker.
 
