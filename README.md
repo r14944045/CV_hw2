@@ -44,6 +44,7 @@ The previous best, `mixtta_ms224` (0.91585, SHA-256 `75b92de5…`), is not stabl
 | Method | Kaggle public | Val (%) |
 |---|---:|---:|
 | `mixtta_ms224sp2` | **0.92724** | 94.46 |
+| `mixtta_ms224p2` | 0.92366 | 94.08 |
 | `mixtta_ms224` | 0.91585 | 93.99 |
 | `mixtta_st2` | 0.91 | 91.90 |
 | `mixtta_st_notrain` | 0.88981 | 90.10 |
@@ -64,12 +65,12 @@ Copies of the scored files are kept in [out/_submitted/](out/_submitted/) (excep
 
 | # | Method | Val, 7 orders (%) | Proxy (%) | Long proxy (%) | Test imbalance floor | Changed vs `mixtta_ms224` | SHA-256 (first 16) |
 |---|---|---:|---:|---:|---:|---:|---|
-| 1 | `mixtta_ms224p2` (control: class prior only) | 93.20 | 83.74 | 87.99 | 0.047 | 3.7 % | `44d79b0853c74e69` |
+| 1 | `mixtta_ms224p2` (control: class prior only): Kaggle 0.92366 | 93.20 | 83.74 | 87.99 | 0.047 | 3.7 % | `44d79b0853c74e69` |
 | 2 | `mixtta_ms224rp2` (shift reset + class prior) | 93.51 | 85.24 | 89.11 | 0.043 | 5.0 % | `e3c14c40f36d1e05` |
 | 3 | `mixtta_ms224sp2` (shift reset + running-mean statistics + class prior): **Kaggle 0.92724** | 93.88 | 85.29 | 89.58 | 0.042 | 6.2 % | `30dc0a8be78faf3d` |
 | — | `mixtta_ms224` (Kaggle 0.91585, for reference) | 93.34 | 80.13 | 84.62 | 0.059 | — | `75b92de51e2742b5` |
 
-`mixtta_ms224sp2` scored 0.92724 (+1.14 pt over `mixtta_ms224`). `mixtta_ms224p2` and `mixtta_ms224rp2` are not scored yet; `p2` would show how much of the gain comes from the prior alone.
+On Kaggle the class prior alone is worth +0.78 pt (`mixtta_ms224p2` 0.92366 against `mixtta_ms224` 0.91585). The shift reset with running-mean statistics adds +0.36 pt (`mixtta_ms224sp2` 0.92724), which is 22 images of the public half and within seed noise. `mixtta_ms224rp2` is not scored.
 
 - **Shift reset (steps 0–0b in [starter/tta/mixtta_ms.py](starter/tta/mixtta_ms.py)).** A batch whose conv1 statistics jump by more than 10× the domain's recent median starts a new domain, and its statistics replace the tracked ones.
   - On test the detector fires at all 11 domain boundaries, plus once inside the halftone domain (batch 148).
