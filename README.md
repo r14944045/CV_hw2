@@ -92,18 +92,22 @@ On Kaggle the class prior alone is worth +0.78 pt (`mixtta_ms224p2` 0.92366 agai
 
 ### Next submissions: splitting the shift batch
 
-| Method | Change | Proxy, mean of 4 offsets (%), seeds 0 / 1 | Val, 7 orders (%), seeds 0 / 1 | Test imbalance floor | Changed vs `sp2` | Test time on RTX 5090 (s) | SHA-256 (first 16) |
-|---|---|---:|---:|---:|---:|---:|---|
-| `mixtta_ms224sp2cp` | In-batch split of the shift batch | 85.60 / 85.59 | 94.00 / 94.01 | 0.0377 | 2.4 % | 24.9 | `c5d8e6cdcb6432af` |
-| `mixtta_ms224sp2cpr` | Split + second pass on the first 2 batches of a domain | 86.19 / 86.09 | 94.00 / 94.14 | 0.0375 | 2.7 % | 26.2 | `fb587264ef394f01` |
-| `mixtta_ms224sp2` (best) | — | 84.15 / 84.15 | 93.88 / 93.78 | 0.0420 | — | 24.6 | `30dc0a8be78faf3d` |
+| Method | Change | Proxy, mean of 4 offsets (%), seeds 0 / 1 | Val, 7 orders (%), seeds 0 / 1 | Val, harness (%) | Test imbalance floor | Changed vs `sp2` | Test time on RTX 5090 (s) | SHA-256 (first 16) |
+|---|---|---:|---:|---:|---:|---:|---:|---|
+| `mixtta_ms224sp2cp` | In-batch split of the shift batch | 85.60 / 85.59 | 94.00 / 94.01 | 94.84 | 0.0377 | 2.4 % | 24.9 | `c5d8e6cdcb6432af` |
+| `mixtta_ms224sp2cpr` | Split + second pass on the first 2 batches of a domain | 86.19 / 86.09 | 94.00 / 94.14 | 94.93 | 0.0375 | 2.7 % | 26.2 | `fb587264ef394f01` |
+| `mixtta_ms224sp2` (best) | — | 84.15 / 84.15 | 93.88 / 93.78 | 94.46 | 0.0420 | — | 24.6 | `30dc0a8be78faf3d` |
 
 - **Why.** `mixtta_ms224sp2` loses most accuracy on batches that contain a domain boundary (proxy: 72 % against 87 % elsewhere). 7 of the 11 test boundaries fall inside a batch, and at 5 of them the shift detector fires on that mixed batch. The new domain's statistics then start from a batch that is partly the old domain.
 - **Split (step 0c in [starter/tta/mixtta_ms.py](starter/tta/mixtta_ms.py)).**
-  - On a detected shift, a changepoint fitted to the per-image conv1 statistics of the previous and current batch finds where the new domain starts. It is within ±1 image on the proxy and ±2 on test.
+  - On a detected shift, a changepoint fitted to the per-image conv1 statistics of the previous and current batch finds where the new domain starts. Measured on the method's own splits:
+    - proxy: all splits within ±1 image of the true boundary;
+    - val (7 orders): 7 of 9 within ±1, and 2 are 10 images early;
+    - test: all 7 within ±2 of the offline segmentation, plus one at the detector's extra firing inside the halftone domain.
+  - When only a few images of the batch are new, the detector usually fires one batch late. That batch is all new domain, so it is not split.
   - Rows before it keep the old domain's statistics, and the new domain's statistics start from the rows after it.
   - The step uses only past and current images, and it changes no random draws.
-- **Second pass (step 5).** On the first 2 batches of each domain, the model self-trains on the batch first, then predicts the same views again. The cost is +6.5 % time.
+- **Second pass (step 5).** On the first 2 batches of each domain, the model self-trains on the batch first, then predicts the same views again. It runs on 18 of the 192 test batches and adds 6.5 % to the time.
 - **Proxy offsets.** "Mean of 4 offsets" averages the proxy with the first 0, 16, 32 and 48 images of each stream dropped, so each boundary falls at four different positions in its batch.
 - **Stability.** Both are stable on test for seeds 0–3: imbalance floor 0.034–0.038 against 0.038–0.042 for `sp2`, tree frog +23 to +55, and at most 5.6 % per class in the late domains.
 - **Paired comparisons.** Both follow `sp2`'s random sequence, so a Kaggle score for either, against 0.92724, measures the change itself. `sp2cp` is identical to `sp2` up to batch 18.

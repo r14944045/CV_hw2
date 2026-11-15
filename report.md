@@ -216,9 +216,11 @@ MixTTA-MS: splitting the shift batch (`mixtta_ms224sp2cp`, `mixtta_ms224sp2cpr`;
   - Where the boundary falls in the batch matters. Dropping the first 16, 32 or 48 images of each proxy stream moves its boundaries within the batch, and `mixtta_ms224sp2` scores 85.29, 85.50, 83.64 and 82.18 % on the four versions (offsets 0–48).
 - Step 0c, the split.
   - When the detector fires, one changepoint is fitted to the per-image conv1 statistics (channel means and log-variances) of the previous batch followed by the current one.
-  - This uses only the past and the current batch. It finds every proxy boundary within ±1 image and every test boundary (from the offline segmentation) within ±2.
+  - This uses only the past and the current batch.
+  - Measured on the method's own splits, it places every proxy split within ±1 image of the true boundary. On val, 7 of 9 splits are within ±1 and 2 are 10 images early. On test, all 7 are within ±2 of the offline segmentation.
+  - When only a few images of the batch belong to the new domain, the detector usually fires one batch late. That batch is all new domain, so it needs no split.
   - Rows before the changepoint are normalised with the old domain's statistics. The new domain's statistics start from the rows after it, and the running mean counts images instead of batches.
-- Step 5, the second pass. On the first 2 batches of a domain, the model self-trains first, then predicts the same views again. This adds one forward pass on about 18 of the 192 test batches.
+- Step 5, the second pass. On the first 2 batches of a domain, the model self-trains first, then predicts the same views again. This adds one forward pass on 18 of the 192 test batches.
 - Results (seed 0 / seed 1):
 
   | | Proxy, mean of 4 offsets (%) | Proxy, offset 0 (%) | Val7 (%) | Test time (s) |
@@ -227,6 +229,7 @@ MixTTA-MS: splitting the shift batch (`mixtta_ms224sp2cp`, `mixtta_ms224sp2cpr`;
   | + split (`sp2cp`) | 85.60 / 85.59 | 86.01 / 86.17 | 94.00 / 94.01 | 24.9 |
   | + split + second pass (`sp2cpr`) | 86.19 / 86.09 | 86.39 / 86.49 | 94.00 / 94.14 | 26.2 |
 
+  - Harness val run (the original order): 94.46 % (`sp2`), 94.84 % (`sp2cp`), 94.93 % (`sp2cpr`).
   - The second pass alone gives 84.43 / 84.82 / 84.87 % for 1 / 2 / 3 batches (seed 0).
   - Self-training on all rows of the split batch instead of the new rows only gives the same result (85.56 %).
 - On test, without labels:
