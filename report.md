@@ -29,18 +29,24 @@ It would be fine to copy the figure from the referred paper.
   - Cons:
 
 ## Q2 Method
-Best model: `mixtta_ms224sp2` (`starter/tta/mixtta_ms.py`), Kaggle public 0.92724, val 94.46 %. The previous best, `mixtta_ms224` (0.91585), is the same method without steps 0 and 3.
+Best model: `mixtta_ms224sp2cpr` (`starter/tta/mixtta_ms.py`), Kaggle public 0.93277, val 94.93 %.
+- The previous best, `mixtta_ms224sp2` (0.92724), is the same method without the in-batch split (step 0, last part) and the second pass (step 6).
+- `mixtta_ms224` (0.91585) also lacks the shift detection and the class prior (steps 0 and 3).
 
 - Backbone model: ResNet-50, the provided 160 px source checkpoint. Every BN layer is replaced by a source-mixed BN layer (w = 0.5) with one statistics tracker per input size.
 - Learning rate: 1e-3, constant (Adam), on the BN scale and shift only.
 
 For each batch of 64:
-0. Domain-shift detection. If the batch's conv1 statistics diverge from the tracked ones by more than 10× the domain's recent median, a new domain starts. The tracked statistics are then replaced by the batch's (tracking rate 1). Within a domain, the k-th batch uses rate max(1/k, 0.1): a running mean of the domain's statistics.
+0. Domain-shift detection. If the batch's conv1 statistics diverge from the tracked ones by more than 10× the domain's recent median, a new domain starts.
+   - Most domain boundaries fall inside a batch. A changepoint fitted to the per-image conv1 statistics of the previous and current batch finds the first image of the new domain.
+   - The images before it are normalised with the old domain's statistics. The tracked statistics are replaced by those of the images after it (tracking rate 1).
+   - Within a domain, the statistics are a running mean over its images, with the tracking rate floored at 0.1.
 1. At input sizes 160 and 224, each with its own BN statistics: update the statistics with the batch, then average the softmax over the batch, its flip and 2 random flip + shift copies.
 2. Average over both sizes.
 3. Class prior: divide the probabilities by (20 × the share of each class predicted so far)^2, with a pseudo-count of 2000 images. The test stream is class-balanced overall.
 4. Apply LAME (k = 5, temperature T = 2) and predict the argmax.
 5. Train: soft cross-entropy between the LAME output and the model's output on a shifted copy at 160 px, 3 steps.
+6. Second pass, on the first 2 batches of each domain only (18 of the 192 test batches): train first (step 5), then predict the same views again with the updated BN scale and shift.
 
 ## Experiments
 
@@ -203,7 +209,7 @@ MixTTA-MS: domain-shift reset and class prior (`mixtta_ms224sp2`: Kaggle public 
     - LAME with 10 neighbours collapses (val7 74.1 %).
     None is better on both measures (base: 93.88 %, 85.29 %).
 
-MixTTA-MS: splitting the shift batch (`mixtta_ms224sp2cp`, `mixtta_ms224sp2cpr`; not yet scored):
+MixTTA-MS: splitting the shift batch (`mixtta_ms224sp2cpr`: Kaggle public 0.93277, +0.55 pt over `mixtta_ms224sp2`; `mixtta_ms224sp2cp` not scored):
 
 - Where `mixtta_ms224sp2`'s errors are inside a domain (proxy, 4 streams, seed 0):
   - batches that contain a domain boundary: 72.3 % accuracy;
@@ -236,6 +242,20 @@ MixTTA-MS: splitting the shift batch (`mixtta_ms224sp2cp`, `mixtta_ms224sp2cpr`;
   - the imbalance floor falls from 0.0420 (`sp2`) to 0.0377 (`sp2cp`) and 0.0375 (`sp2cpr`), and is lower for each of seeds 1–3;
   - the predictions stay balanced: tree frog +23 to +55, at most 5.6 % per class in the late domains;
   - against `mixtta_ms224sp2`, 2.4 % (`sp2cp`) and 2.7 % (`sp2cpr`) of the predictions change, and `sp2cp` and `sp2cpr` differ from each other by 0.85 %. Both use the same random draws as `sp2`, so a Kaggle score for either is a paired comparison with 0.92724. `sp2cp` is identical to `sp2` until the first split at batch 18; `sp2cpr` differs from the first batch on, because the second pass also covers the start of the stream.
+- Kaggle result.
+  - `mixtta_ms224sp2cpr` scored 0.93277 against 0.92724 for `mixtta_ms224sp2`: +0.55 pt, about 34 more correct images on the public part.
+  - Expected beforehand: +0.2–0.4 pt, with about ±0.15–0.2 pt of paired noise for 2.7 % changed predictions, so the gain is larger than predicted and about 3× the noise.
+  - The offset proxy predicted +2.0 pt, so it overstated this change by about 4×, as it did for the shift reset and the class prior.
+  - The imbalance floor on test has tracked Kaggle for all four scored MixTTA-MS files:
+
+    | Method | Test imbalance floor | Kaggle public |
+    |---|---:|---:|
+    | `mixtta_ms224` | 0.059 | 0.91585 |
+    | `mixtta_ms224p2` | 0.047 | 0.92366 |
+    | `mixtta_ms224sp2` | 0.042 | 0.92724 |
+    | `mixtta_ms224sp2cpr` | 0.0375 | 0.93277 |
+
+  - `mixtta_ms224sp2cp` (split only) is not scored, so the gain cannot yet be divided between the split and the second pass.
 
 Why MixTTA outperforms RoTTA and CoTTA:
 

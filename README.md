@@ -6,10 +6,10 @@ Assignment spec: [HW2.md](HW2.md). Experiments and method write-ups: [report.md]
 
 | | |
 |---|---|
-| Method | `mixtta_ms224sp2` (MixTTA-MS with domain-shift reset and a class prior. Self-training MixTTA at input sizes 160 and 224, separate BN statistics per size, flip + 2-shift averaging, LAME on T = 2-softened probabilities, 3 Adam steps per batch on BN γ/β at 160. Added: online domain-shift detection that resets the tracked BN statistics, running-mean statistics within a domain, and a global class-prior correction (λ = 2) that keeps self-training from drifting. bf16, deterministic cuDNN) |
-| Kaggle public | **0.92724** |
-| Val accuracy | 94.46 % (mean over 7 val stream orders: 93.88 %) |
-| Test-stream time | 28.5 s on an RTX 5090 (limit: 90 s on a 3090); peak VRAM 4.2 GB |
+| Method | `mixtta_ms224sp2cpr` (MixTTA-MS with domain-shift reset, an in-batch split of the shift batch, a class prior and a second pass after each shift). It is self-training MixTTA at input sizes 160 and 224, with separate BN statistics per size, flip + 2-shift averaging, LAME on T = 2-softened probabilities and 3 Adam steps per batch on BN γ/β at 160. Additions: online domain-shift detection that resets the tracked BN statistics, starting from the images after a changepoint found inside the batch; running-mean statistics within a domain; a global class-prior correction (λ = 2) that keeps self-training from drifting; and, on the first 2 batches of each domain, self-training before predicting the batch again. bf16, deterministic cuDNN |
+| Kaggle public | **0.93277** |
+| Val accuracy | 94.93 % (mean over 7 val stream orders: 94.00 %) |
+| Test-stream time | 26.2 s on an RTX 5090 (limit: 90 s on a 3090); peak VRAM 4.6 GB |
 | Code | [starter/tta/mixtta_ms.py](starter/tta/mixtta_ms.py), registered in [starter/methods.py](starter/methods.py) |
 
 ### Generate the submission file
@@ -17,7 +17,7 @@ Assignment spec: [HW2.md](HW2.md). Experiments and method write-ups: [report.md]
 Run from the repo root on a CUDA machine. It needs `data/` (unzipped from `ntu-cvpdl-2026-hw-2.zip`) and `source_resnet50_160.pth`.
 
 ```bash
-METHOD=mixtta_ms224sp2
+METHOD=mixtta_ms224sp2cpr
 cd starter
 python run.py --method $METHOD --split test --data ../data --ckpt ../source_resnet50_160.pth --out ../out/$METHOD
 cd ..
@@ -25,17 +25,19 @@ python tools/check_submission.py out/$METHOD     # format, run-log hash, time an
 sha256sum out/$METHOD/test_pred.csv
 ```
 
-The file to upload is `out/mixtta_ms224sp2/test_pred.csv`.
+The file to upload is `out/mixtta_ms224sp2cpr/test_pred.csv`.
 
-The submitted file's SHA-256 is `30dc0a8be78faf3d7728dfaf0090779d72b8568b3a974a9c5e59a507ba97a20c`. It was produced with torch 2.13.0+cu129, seed 0, on an RTX 5090.
+The submitted file's SHA-256 is `fb587264ef394f0121a348f7dff3f29ac28a16968291fe73684b123d1cc25c93`. It was produced with torch 2.13.0+cu129, seed 0, on an RTX 5090.
 
-The method uses deterministic cuDNN algorithms, so a rerun on the same GPU and software reproduces this hash exactly (checked with two harness runs, one on a GPU shared with another user's jobs). Reruns with seeds 1–3:
+The method uses deterministic cuDNN algorithms, so a rerun on the same GPU and software reproduces this hash exactly (checked with two harness runs). Reruns with seeds 1–3:
 - change 3.8–3.9 % of the test predictions;
-- stay class-balanced: tree frog +30 to +49 predictions, no class above 5.6 % in the late domains.
+- stay class-balanced: tree frog +23 to +33 predictions, no class above 5.5 % in the late domains.
 
 A different GPU (such as the TAs' 3090) should behave like another seed.
 
-The previous best, `mixtta_ms224` (0.91585, SHA-256 `75b92de5…`), is not stable across seeds: seed 3 drifts into predicting tree frog (+1039).
+The previous best, `mixtta_ms224sp2` (0.92724, SHA-256 `30dc0a8b…`), is the same method without the in-batch split and the second pass. Regenerate it with `METHOD=mixtta_ms224sp2`.
+
+An earlier best, `mixtta_ms224` (0.91585, SHA-256 `75b92de5…`), is not stable across seeds: seed 3 drifts into predicting tree frog (+1039).
 
 `bash tools/run_gpu.sh $METHOD` runs val (prints accuracy) and test, then runs the checker.
 
@@ -43,7 +45,8 @@ The previous best, `mixtta_ms224` (0.91585, SHA-256 `75b92de5…`), is not stabl
 
 | Method | Kaggle public | Val (%) |
 |---|---:|---:|
-| `mixtta_ms224sp2` | **0.92724** | 94.46 |
+| `mixtta_ms224sp2cpr` | **0.93277** | 94.93 |
+| `mixtta_ms224sp2` | 0.92724 | 94.46 |
 | `mixtta_ms224p2` | 0.92366 | 94.08 |
 | `mixtta_ms224` | 0.91585 | 93.99 |
 | `mixtta_st2` | 0.91 | 91.90 |
@@ -56,7 +59,7 @@ The previous best, `mixtta_ms224` (0.91585, SHA-256 `75b92de5…`), is not stabl
 | `rbn` | 0.70231 | 76.23 |
 | `rotta` | 0.65983 | 65.01 |
 
-Copies of the scored files are kept in [out/_submitted/](out/_submitted/) (except `mixtta_ms224` and `mixtta_ms224sp2`, which reproduce exactly).
+Copies of the scored files are kept in [out/_submitted/](out/_submitted/) (except `mixtta_ms224`, `mixtta_ms224sp2` and `mixtta_ms224sp2cpr`, which reproduce exactly).
 
 - `mixtta_st2` (SHA-256 `2359887ab175d886…`) does not reproduce bit-for-bit. Reruns differ on 9–12 of the 12,288 predictions, so its reference copy is `out/_submitted/mixtta_st2_kaggle0.91.csv`.
 - `cotta` and `cotta_norst` take about 68 s on the test stream on an RTX 5090, so they may exceed the 90 s limit on a 3090.
@@ -90,13 +93,13 @@ On Kaggle the class prior alone is worth +0.78 pt (`mixtta_ms224p2` 0.92366 agai
   - Those reruns reproduced each file's SHA-256 exactly, and their run logs are the ones in `out/`.
   - Run time has not been measured on a 3090.
 
-### Next submissions: splitting the shift batch
+### Splitting the shift batch (current best)
 
 | Method | Change | Proxy, mean of 4 offsets (%), seeds 0 / 1 | Val, 7 orders (%), seeds 0 / 1 | Val, harness (%) | Test imbalance floor | Changed vs `sp2` | Test time on RTX 5090 (s) | SHA-256 (first 16) |
 |---|---|---:|---:|---:|---:|---:|---:|---|
 | `mixtta_ms224sp2cp` | In-batch split of the shift batch | 85.60 / 85.59 | 94.00 / 94.01 | 94.84 | 0.0377 | 2.4 % | 24.9 | `c5d8e6cdcb6432af` |
-| `mixtta_ms224sp2cpr` | Split + second pass on the first 2 batches of a domain | 86.19 / 86.09 | 94.00 / 94.14 | 94.93 | 0.0375 | 2.7 % | 26.2 | `fb587264ef394f01` |
-| `mixtta_ms224sp2` (best) | — | 84.15 / 84.15 | 93.88 / 93.78 | 94.46 | 0.0420 | — | 24.6 | `30dc0a8be78faf3d` |
+| `mixtta_ms224sp2cpr` (best): **Kaggle 0.93277** | Split + second pass on the first 2 batches of a domain | 86.19 / 86.09 | 94.00 / 94.14 | 94.93 | 0.0375 | 2.7 % | 26.2 | `fb587264ef394f01` |
+| `mixtta_ms224sp2` (Kaggle 0.92724) | — | 84.15 / 84.15 | 93.88 / 93.78 | 94.46 | 0.0420 | — | 24.6 | `30dc0a8be78faf3d` |
 
 - **Why.** `mixtta_ms224sp2` loses most accuracy on batches that contain a domain boundary (proxy: 72 % against 87 % elsewhere). 7 of the 11 test boundaries fall inside a batch, and at 5 of them the shift detector fires on that mixed batch. The new domain's statistics then start from a batch that is partly the old domain.
 - **Split (step 0c in [starter/tta/mixtta_ms.py](starter/tta/mixtta_ms.py)).**
@@ -111,7 +114,7 @@ On Kaggle the class prior alone is worth +0.78 pt (`mixtta_ms224p2` 0.92366 agai
 - **Proxy offsets.** "Mean of 4 offsets" averages the proxy with the first 0, 16, 32 and 48 images of each stream dropped, so each boundary falls at four different positions in its batch.
 - **Stability.** Both are stable on test for seeds 0–3: imbalance floor 0.034–0.038 against 0.038–0.042 for `sp2`, tree frog +23 to +55, and at most 5.6 % per class in the late domains.
 - **Paired comparisons.** Both follow `sp2`'s random sequence, so a Kaggle score for either, against 0.92724, measures the change itself. `sp2cp` is identical to `sp2` up to batch 18.
-- **Expected gain.** The proxy has overstated Kaggle gains about 4×, and the test stream has fewer boundary batches than the offset proxy, so expect about +0.2–0.4 pt, not +1.5–2.
+- **Kaggle.** `mixtta_ms224sp2cpr` scored 0.93277, +0.55 pt over `mixtta_ms224sp2` (expected +0.2–0.4; the offset proxy predicted +2.0, again about 4× too high). `mixtta_ms224sp2cp` is not scored, so the gain is not yet divided between the split and the second pass.
 
 ### Variants of `mixtta_ms224sp2`
 
@@ -121,7 +124,7 @@ On Kaggle the class prior alone is worth +0.78 pt (`mixtta_ms224p2` 0.92366 agai
 | `mixtta_ms224sp2f` | Faster prior: pseudo-count 1000 | — | — | 0.041 | 1.2 % | `45dd36cb6cd0bae6` |
 | `mixtta_ms224sp2t` | Temporal prior: × (previous batch's mean LAME output + 0.1)^0.2 | 93.96 | 85.12 | 0.042 | 1.6 % | `889489681935c8c4` |
 | `mixtta_ms3sp2` | Third input size, 192 | 93.81 | 85.00 | 0.043 | 3.9 % | `5ea61220011130ee` |
-| `mixtta_ms224sp2` (best) | — | 93.88 | 85.29 | 0.042 | — | `30dc0a8be78faf3d` |
+| `mixtta_ms224sp2` | — | 93.88 | 85.29 | 0.042 | — | `30dc0a8be78faf3d` |
 
 - **Offline evaluation cannot judge the prior settings.** The proxy predicted +3.6 pt for the class prior and Kaggle gave +0.78. Val is too short for the prior to act.
 - **`sp3` and `sp2f` are clean comparisons.** They follow the same random sequence as `sp2`, so they differ from it only through the prior setting, on 1.2–1.3 % of the predictions. A Kaggle score for either, compared with 0.92724, is a paired measurement of that setting.
