@@ -6,18 +6,18 @@ Assignment spec: [HW2.md](HW2.md). Experiments and method write-ups: [report.md]
 
 | | |
 |---|---|
-| Method | `mixtta_st2` (MixTTA: source-mixed BN statistics with α = 0.4 and w = 0.5, flip + 4-shift averaging, LAME on view-averaged features, then 2 Adam steps per batch on BN γ/β towards the LAME output) |
-| Kaggle public | **0.91** |
-| Val accuracy | 91.90 % |
-| Test-stream time | 33.0 s on an RTX 5090 (limit: 90 s on a 3090); peak VRAM 3.8 GB |
-| Code | [starter/tta/mixtta.py](starter/tta/mixtta.py), registered in [starter/methods.py](starter/methods.py) |
+| Method | `mixtta_ms224` (MixTTA-MS: MixTTA with self-training, run at input sizes 160 and 224 with separate BN statistics per size. Flip + 2-shift averaging, LAME on T = 2-softened probabilities, then 3 Adam steps per batch on BN γ/β at 160. bf16, deterministic cuDNN) |
+| Kaggle public | **0.91585** |
+| Val accuracy | 93.99 % (mean over 7 val stream orders and 2 seeds: 93.18 %) |
+| Test-stream time | 26.6 s on an RTX 5090 (limit: 90 s on a 3090); peak VRAM 4.2 GB |
+| Code | [starter/tta/mixtta_ms.py](starter/tta/mixtta_ms.py), registered in [starter/methods.py](starter/methods.py) |
 
 ### Generate the submission file
 
 Run from the repo root on a CUDA machine. It needs `data/` (unzipped from `ntu-cvpdl-2026-hw-2.zip`) and `source_resnet50_160.pth`.
 
 ```bash
-METHOD=mixtta_st2
+METHOD=mixtta_ms224
 cd starter
 python run.py --method $METHOD --split test --data ../data --ckpt ../source_resnet50_160.pth --out ../out/$METHOD
 cd ..
@@ -25,13 +25,11 @@ python tools/check_submission.py out/$METHOD     # format, run-log hash, time an
 sha256sum out/$METHOD/test_pred.csv
 ```
 
-The file to upload is `out/mixtta_st2/test_pred.csv`.
+The file to upload is `out/mixtta_ms224/test_pred.csv`.
 
-The submitted file's SHA-256 is `2359887ab175d886c0231e6f5079635ecec84612c04680d47070b692125bb8f5`. It was produced with torch 2.13.0+cu129, seed 0, on an RTX 5090.
+The submitted file's SHA-256 is `75b92de51e2742b5f453694b5a7a82f67f0e4b107eb086b31c20c89cd1e567c0`. It was produced with torch 2.13.0+cu129, seed 0, on an RTX 5090.
 
-A rerun will not reproduce this hash exactly. The gradient steps amplify GPU nondeterminism (cuDNN autotuning), so three reruns each differed from the submitted file on 9–12 of the 12,288 predictions (under 0.1 %), and from each other. Keep the submitted file itself as the reference.
-
-The forward-only `mixtta_st_notrain` (Kaggle 0.88981) does reproduce exactly. Its SHA-256 is `614548cc5b4e0d5e168e546c11b4cf18724975dc3607024f6c33739914b1fc32`.
+The method uses deterministic cuDNN algorithms, so a rerun on the same GPU and software reproduces this hash exactly (checked with two reruns). A different GPU or library version (such as the TAs' 3090) gives a slightly different file.
 
 `bash tools/run_gpu.sh $METHOD` runs val (prints accuracy) and test, then runs the checker.
 
@@ -39,7 +37,8 @@ The forward-only `mixtta_st_notrain` (Kaggle 0.88981) does reproduce exactly. It
 
 | Method | Kaggle public | Val (%) |
 |---|---:|---:|
-| `mixtta_st2` | **0.91** | 91.90 |
+| `mixtta_ms224` | **0.91585** | 93.99 |
+| `mixtta_st2` | 0.91 | 91.90 |
 | `mixtta_st_notrain` | 0.88981 | 90.10 |
 | `mixtta` | 0.86246 | 89.06 |
 | `cotta` | 0.79117 | 76.99 |
@@ -49,22 +48,56 @@ The forward-only `mixtta_st_notrain` (Kaggle 0.88981) does reproduce exactly. It
 | `rbn` | 0.70231 | 76.23 |
 | `rotta` | 0.65983 | 65.01 |
 
-`cotta` and `cotta_norst` take about 68 s on the test stream on an RTX 5090, so they may exceed the 90 s limit on a 3090.
+Copies of the scored files are kept in [out/_submitted/](out/_submitted/) (except `mixtta_ms224`, which reproduces exactly).
 
-Generated but not submitted:
+- `mixtta_st2` (SHA-256 `2359887ab175d886…`) does not reproduce bit-for-bit. Reruns differ on 9–12 of the 12,288 predictions, so its reference copy is `out/_submitted/mixtta_st2_kaggle0.91.csv`.
+- `cotta` and `cotta_norst` take about 68 s on the test stream on an RTX 5090, so they may exceed the 90 s limit on a 3090.
 
-| Method | Val, 7 orders (%) | Test time on RTX 5090 (s) | Changed vs the 0.91 file | SHA-256 (first 16) |
+### Next submissions (recommended order)
+
+| # | Method | Val, 7 orders (%) | Proxy (%) | Long proxy (%) | Test imbalance floor | Changed vs `mixtta_ms224` | SHA-256 (first 16) |
+|---|---|---:|---:|---:|---:|---:|---|
+| 1 | `mixtta_ms224p2` (control: class prior only) | 93.20 | 83.74 | 87.99 | 0.047 | 3.7 % | `44d79b0853c74e69` |
+| 2 | `mixtta_ms224rp2` (shift reset + class prior) | 93.51 | 85.24 | 89.11 | 0.043 | 5.0 % | `e3c14c40f36d1e05` |
+| 3 | `mixtta_ms224sp2` (shift reset + running-mean statistics + class prior) | 93.88 | 85.29 | 89.58 | 0.042 | 6.2 % | `30dc0a8be78faf3d` |
+| — | `mixtta_ms224` (current best, for reference) | 93.34 | 80.13 | 84.62 | 0.059 | — | `75b92de51e2742b5` |
+
+Upload `out/<method>/test_pred.csv`. Submit `mixtta_ms224p2` first: its score shows how much of the proxy's class-prior gain carries over to Kaggle.
+
+- **Shift reset (steps 0–0b in [starter/tta/mixtta_ms.py](starter/tta/mixtta_ms.py)).** A batch whose conv1 statistics jump by more than 10× the domain's recent median starts a new domain, and its statistics replace the tracked ones.
+  - On test the detector fires at all 11 domain boundaries, plus once inside the halftone domain (batch 148).
+  - The 12 test domains are 676–1252 images long. Their boundaries are listed in [tools/dev/test_bounds.npy](tools/dev/test_bounds.npy).
+- **The class prior is needed for stability, not just for score.**
+  - Without it, BN self-training on the test stream can drift into predicting tree frog after the thermal-colormap domain.
+  - `mixtta_ms224` itself does this for seed 3: +1039 tree-frog predictions, and 18 % of the last three domains predicted as one class. Seeds 0–2 do not drift.
+  - `mixtta_ms224rp2` and `mixtta_ms224sp2` stay balanced for seeds 0–3: tree frog +30 to +59, at most 5.7 % per class in the late domains.
+  - Before the prior is applied, their raw ensemble argmax also stays balanced, so the prior is not hiding a degrading model.
+- **Never submit `mixtta_ms224r` or `mixtta_ms224s`.** They are the same methods without the prior, and both drift into tree frog on test (+1120 and +3349 predictions). Their files are kept in `out/` as ablations.
+- **Metrics.**
+  - Proxy = val images with synthetic versions of the 12 test corruptions, 4 streams of 3 domains ([tools/dev/](tools/dev/)). It ranks the 5 scored MixTTA methods in the Kaggle order, but its absolute accuracy is lower.
+  - Long proxy = the 4 streams back to back (132 batches).
+  - Imbalance floor = the minimum error rate implied by the predicted class counts if every test domain is exactly class-balanced, as every val domain is.
+  - Reruns with another seed change about 4 % of the test predictions, so `rp2` and `sp2` (3.3 % apart) cannot be ranked offline.
+- The new methods add one conv1 forward per batch to `mixtta_ms224`'s compute. Under the same shared-GPU load, they ran no slower than `mixtta_ms224` (152 and 60 s, against 163 s). The times in their run logs come from that shared GPU and are not representative.
+
+Generated but not submitted (older):
+
+| Method | Val, 7 orders (%) | Test time on RTX 5090 (s) | Changed vs `mixtta_ms224` | SHA-256 (first 16) |
 |---|---:|---:|---:|---|
-| `mixtta_ms224` | 93.18 | 26.6 | 8.4 % | `75b92de51e2742b5` |
-| `mixtta_ms3s3` | 93.53 | 32.5 | 8.7 % | `3b12773d9d323d53` |
-| `mixtta_ms224_t1` (control: LAME T=1) | 93.02 | 26.2 | 6.8 % | `14ee137f2d0c0a80` |
-| `mixtta_ms3` | 93.31 | 31.0 | 8.5 % | `8361707ae3ebcea4` |
+| `mixtta_ms224p` (class-prior correction, λ = 1) | 93.17 | 24.7 | 2.6 % | `826dc3dc6aacc643` |
+| `mixtta_ms3s3` | 93.53 | 32.5 | 4.3 % | `3b12773d9d323d53` |
+| `mixtta_ms224_t1` (control: LAME T=1) | 93.02 | 26.2 | 5.0 % | `14ee137f2d0c0a80` |
+| `mixtta_ms3` | 93.31 | 31.0 | 4.8 % | `8361707ae3ebcea4` |
 | `mixtta_st` | — | 27.2 | — | — |
 
-- The `mixtta_ms*` methods ([starter/tta/mixtta_ms.py](starter/tta/mixtta_ms.py)) run MixTTA with self-training at several input sizes: 160 plus 224, or 160 plus 192 and 224. Each size has its own BN statistics, and self-training runs at 160 only.
-- They use bf16 and deterministic cuDNN, so a rerun on the same GPU and software reproduces the hash. A different GPU (such as the TAs' 3090) gives a slightly different file.
+- `mixtta_ms224p` and `mixtta_ms224p2` are `mixtta_ms224` plus an online class-prior correction (step 3b in [starter/tta/mixtta_ms.py](starter/tta/mixtta_ms.py)).
+  - The test stream is class-balanced overall, but the model over-predicts some classes (tree frog +126, container ship +100) and under-predicts others (tabby −173, sports car −106).
+  - Each batch's probabilities are divided by (C × the share of each label predicted so far)^λ, with a pseudo-count of 2000 samples so the correction starts slowly.
+  - It does not change val, which is too short for it to act. On a long class-balanced proxy it stops self-training drifting in late domains (74.5 → 82.2 / 83.8 % for λ = 1 / 2).
+  - It also lowers the test stream's per-domain imbalance floor from 6.5 % to 5.7 / 5.3 %.
+- `mixtta_ms3` and `mixtta_ms3s3` add a third input size, 192. `mixtta_ms3s3` takes 3 self-training steps per batch and `mixtta_ms3` takes 2.
 - "Val, 7 orders" is the mean over the 7 val stream orders and 2 seeds. Differences under about 0.3 pt are noise.
-- Most of the multi-scale val gain comes from the val fisheye domain (small objects inside black borders), which the test stream does not have. Expect a smaller gain on Kaggle.
+- Most of the multi-scale val gain comes from the val fisheye domain (small objects inside black borders), which the test stream does not have. On Kaggle, `mixtta_ms224` gained 0.6 pt over `mixtta_st2`; val showed 2.3 pt.
 - `mixtta_st` takes 1 self-training step per batch instead of 2.
 
 Generate any of these with the commands above by setting `METHOD=<name>`.

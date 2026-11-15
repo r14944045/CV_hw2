@@ -1,0 +1,28 @@
+{"round": "r1", "name": "mx_default", "kw": {}, "proxy": 80.13, "per": [92.5, 89.4, 86.4, 66.1, 79.3, 72.9, 91.1, 85.1, 76.5, 74.6, 74.7, 70.4]}
+{"round": "r1", "name": "sd_a1", "kw": {"shift_detect": true, "shift_thr": 10.0, "shift_alpha": 1.0}, "proxy": 82.21, "per": [92.4, 90.6, 87.3, 65.6, 80.7, 79.6, 91.0, 85.2, 86.6, 75.0, 74.7, 78.8]}
+{"round": "r1", "name": "sd_a1_rst", "kw": {"shift_detect": true, "shift_thr": 10.0, "shift_alpha": 1.0, "shift_reset_params": true}, "proxy": 80.89, "per": [92.4, 90.7, 84.3, 65.6, 80.7, 79.2, 91.0, 82.2, 83.2, 75.0, 75.3, 70.1]}
+{"round": "r1", "name": "br3_blur", "kw": {"branches": [[160, "id"], [224, "id"], [224, "blur1.0"]]}, "proxy": 80.91, "per": [93.3, 88.1, 84.6, 63.7, 79.1, 72.5, 91.2, 87.6, 86.4, 77.2, 72.1, 73.9]}
+{"round": "r1", "name": "br2_blur", "kw": {"branches": [[160, "id"], [224, "blur1.0"]]}, "proxy": 80.08, "per": [93.3, 89.2, 82.4, 63.1, 79.0, 71.4, 91.2, 88.1, 84.5, 75.4, 74.9, 65.7]}
+{"round": "r1", "name": "train_first", "kw": {"train_first": true}, "proxy": 81.3, "per": [93.6, 89.6, 87.9, 63.8, 80.0, 74.2, 91.5, 85.4, 86.8, 73.6, 76.0, 73.0]}
+{"round": "r1", "name": "steps5", "kw": {"steps": 5}, "proxy": 79.73, "per": [92.9, 89.5, 87.6, 65.1, 76.2, 70.8, 90.1, 85.5, 75.5, 73.8, 72.1, 76.1]}
+{"round": "r1", "name": "lr2e-3", "kw": {"lr": 0.002}, "proxy": 78.85, "per": [92.1, 88.8, 90.0, 62.1, 71.8, 57.4, 90.2, 84.7, 89.7, 72.8, 72.5, 73.0]}
+{"round": "r1", "name": "sd_domprior1", "kw": {"shift_detect": true, "shift_thr": 10.0, "shift_alpha": 1.0, "dom_prior": 1.0, "dom_tau": 200.0}, "proxy": 84.0, "per": [92.0, 92.1, 86.9, 67.4, 84.4, 84.3, 90.6, 88.1, 88.2, 76.0, 78.5, 80.7]}
+{"round": "r1", "name": "globprior2", "kw": {"glob_prior": 2.0}, "proxy": 83.74, "per": [92.9, 91.0, 86.8, 67.8, 86.7, 83.0, 91.1, 87.8, 82.7, 77.6, 77.5, 79.9]}
+{"round": "r2p", "name": "sd_cum01", "kw": {"shift_detect": true, "shift_thr": 10.0, "alpha_cum": true, "alpha_min": 0.1}, "proxy": 83.52, "per": [92.5, 91.2, 86.4, 66.8, 84.9, 82.4, 91.2, 85.1, 85.1, 78.9, 78.0, 80.1]}
+{"round": "r2v", "name": "sd_a1", "kw": {"shift_detect": true, "shift_thr": 10.0, "shift_alpha": 1.0}, "val7": 93.41, "vdom": [94.24, 92.86, 93.0]}
+{"round": "r2p", "name": "sd_cum02", "kw": {"shift_detect": true, "shift_thr": 10.0, "alpha_cum": true, "alpha_min": 0.2}, "proxy": 83.46, "per": [92.5, 91.7, 86.6, 66.4, 84.5, 79.7, 91.4, 85.5, 85.6, 79.4, 78.2, 80.1]}
+{"round": "r2p", "name": "sd_dp1_gp2", "kw": {"shift_detect": true, "shift_thr": 10.0, "shift_alpha": 1.0, "dom_prior": 1.0, "dom_tau": 200.0, "glob_prior": 2.0}, "proxy": 83.03, "per": [91.8, 92.0, 85.5, 65.3, 84.8, 82.4, 88.8, 86.7, 85.5, 74.7, 79.0, 81.0]}
+{"round": "r2v", "name": "sd_domprior1", "kw": {"shift_detect": true, "shift_thr": 10.0, "shift_alpha": 1.0, "dom_prior": 1.0, "dom_tau": 200.0}, "val7": 92.96, "vdom": [93.26, 93.53, 91.9]}
+{"round": "r2p", "name": "sd_dp2", "kw": {"shift_detect": true, "shift_thr": 10.0, "shift_alpha": 1.0, "dom_prior": 2.0, "dom_tau": 200.0}, "proxy": 77.86, "per": [88.7, 85.6, 82.7, 60.7, 78.5, 75.2, 85.6, 80.5, 80.1, 69.3, 73.2, 75.2]}
+{"round": "r2v", "name": "globprior2", "kw": {"glob_prior": 2.0}, "val7": 93.2, "vdom": [93.72, 93.35, 92.34]}
+{"round": "r2p", "name": "sd_dp1_t100", "kw": {"shift_detect": true, "shift_thr": 10.0, "shift_alpha": 1.0, "dom_prior": 1.0, "dom_tau": 100.0}, "proxy": 82.17, "per": [92.0, 91.3, 86.6, 64.9, 83.0, 81.2, 88.7, 84.4, 84.3, 74.1, 76.4, 80.4]}
+{"round": "r2p", "name": "sd_dp1_t400", "kw": {"shift_detect": true, "shift_thr": 10.0, "shift_alpha": 1.0, "dom_prior": 1.0, "dom_tau": 400.0}, "proxy": 84.59, "per": [92.0, 92.5, 87.3, 67.5, 85.6, 84.2, 90.6, 88.5, 87.9, 78.0, 79.7, 82.5]}
+{"round": "r2p", "name": "sd_gp2", "kw": {"shift_detect": true, "shift_thr": 10.0, "shift_alpha": 1.0, "glob_prior": 2.0}, "proxy": 84.75, "per": [92.8, 92.1, 87.6, 67.4, 86.7, 85.0, 91.0, 88.3, 87.9, 78.0, 79.4, 82.2]}
+{"round": "r3p", "name": "sd_cum01_gp2", "kw": {"shift_detect": true, "shift_thr": 10.0, "alpha_cum": true, "alpha_min": 0.1, "glob_prior": 2.0}, "proxy": 85.29, "per": [93.0, 92.8, 86.4, 69.3, 87.3, 84.3, 91.2, 88.4, 87.7, 80.9, 79.7, 82.7]}
+{"round": "r3v", "name": "sd_cum01", "kw": {"shift_detect": true, "shift_thr": 10.0, "alpha_cum": true, "alpha_min": 0.1}, "val7": 93.72, "vdom": [94.46, 93.98, 92.48]}
+{"round": "r3p", "name": "sd_cum01_gp1", "kw": {"shift_detect": true, "shift_thr": 10.0, "alpha_cum": true, "alpha_min": 0.1, "glob_prior": 1.0}, "proxy": 84.74, "per": [92.8, 92.7, 86.3, 68.4, 86.6, 84.8, 91.5, 86.5, 86.4, 79.9, 79.4, 82.2]}
+{"round": "r3p", "name": "sd_cum01_gp3", "kw": {"shift_detect": true, "shift_thr": 10.0, "alpha_cum": true, "alpha_min": 0.1, "glob_prior": 3.0}, "proxy": 85.42, "per": [92.8, 93.0, 86.9, 69.1, 88.0, 84.3, 91.1, 88.4, 87.7, 81.8, 80.5, 81.7]}
+{"round": "r3v", "name": "sd_cum01_gp2", "kw": {"shift_detect": true, "shift_thr": 10.0, "alpha_cum": true, "alpha_min": 0.1, "glob_prior": 2.0}, "val7": 93.88, "vdom": [94.48, 94.28, 92.65]}
+{"round": "r3p", "name": "sd_cum005_gp2", "kw": {"shift_detect": true, "shift_thr": 10.0, "alpha_cum": true, "alpha_min": 0.05, "glob_prior": 2.0}, "proxy": 85.29, "per": [93.0, 92.7, 86.4, 69.3, 87.6, 84.0, 91.2, 88.1, 88.1, 80.9, 79.6, 83.0]}
+{"round": "prod", "name": "mixtta_ms224r", "proxy": 82.79, "per": [91.9, 90.3, 86.9, 65.7, 83.1, 80.2, 91.1, 85.1, 85.8, 78.9, 75.0, 79.9], "val7": 93.34, "vdom": [94.4, 93.01, 92.39]}
+{"round": "prod", "name": "mixtta_ms224rp2", "proxy": 85.24, "per": [92.0, 92.3, 87.3, 68.4, 86.5, 86.1, 91.2, 89.1, 87.6, 80.9, 80.5, 81.9], "val7": 93.51, "vdom": [94.24, 93.73, 92.34]}
