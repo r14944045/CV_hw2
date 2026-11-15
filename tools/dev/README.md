@@ -9,7 +9,7 @@ Cached tensors go in `tools/dev/cache/` (git-ignored), or in `$HW2_DEV_CACHE` if
 | `cache.py` | Decode val and test PNGs once into `cache/{val,test}.pt` (uint8 tensors; labels for val) |
 | `segment.py <split> <K>` | Split a stream into K domains by dynamic programming on early-layer statistics of the source model. Writes `<split>_bounds.npy` |
 | `val_bounds.npy`, `test_bounds.npy` | Domain boundaries found by `segment.py` (val: 776 / 1500; test: 11 boundaries, domains of 676–1252 images) |
-| `fe.py` | Fast evaluator: `val7` (7 val stream orders, per-domain accuracy), `proxy` (synthetic test-like streams), `longproxy` (the 4 proxy streams back to back), `run` |
+| `fe.py` | Fast evaluator: `val7` (7 val stream orders, per-domain accuracy), `proxy` (synthetic test-like streams; `offset=k` drops the first k images of each stream, which moves the boundaries within the batch), `longproxy` (the 4 proxy streams back to back), `run` |
 | `proxy.py <mix>` | Labelled proxy for test: val images with synthetic versions of the 12 test corruptions, blended with the original image at strength `mix` (0.5 used) |
 | `mx.py`, `exp.py` | Experimental MixTTA-MS variant with switchable options (extra branches, shift detection, priors, train-before-predict), and the experiment runner. Results are in `exp_log.txt` |
 | `pv.py`, `lp.py` | Proxy + val7, and long proxy, for methods registered in `starter/methods.py` |
@@ -17,6 +17,8 @@ Cached tensors go in `tools/dev/cache/` (git-ignored), or in `$HW2_DEV_CACHE` if
 | `shiftsim.py` | Checks offline that the domain-shift detector fires at the true boundaries |
 | `balance.py`, `record.py` | Offline per-domain class-balance analysis on recorded probabilities |
 | `seeds.sh <method>` | Test runs with seeds 1–3 (stability check) |
+| `split_exp.py <names>` | In-batch split and second-pass experiments (proxy at 4 offsets + val7; `SEED=` env var) |
+| `testcheck.py "dict(...)"` | Label-free test check of a `MixTTAMS` setting: detected shifts and splits, per-domain imbalance floor and largest class share, and the share of predictions changed against a reference submission |
 
 ## Calibration against Kaggle public scores
 

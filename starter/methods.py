@@ -74,6 +74,11 @@ METHODS = {
     "mixtta_ms224sp2f": partial(MixTTAMS, shift_thr=10.0, alpha_min=0.1, prior_lambda=2.0, prior_tau=1000.0),
     "mixtta_ms3sp2": partial(MixTTAMS, sizes=(160, 192, 224), shift_thr=10.0, alpha_min=0.1, prior_lambda=2.0),
     "mixtta_ms224sp2t": partial(MixTTAMS, shift_thr=10.0, alpha_min=0.1, prior_lambda=2.0, temporal_mu=0.2),
+    # + in-batch split of the shift batch (step 0c): rows before the changepoint keep the old domain's statistics
+    "mixtta_ms224sp2cp": partial(MixTTAMS, shift_thr=10.0, alpha_min=0.1, prior_lambda=2.0, split_shift=True),
+    # + on the first 2 batches of a domain: self-train first, then predict again with the updated gamma/beta (step 5)
+    "mixtta_ms224sp2cpr": partial(MixTTAMS, shift_thr=10.0, alpha_min=0.1, prior_lambda=2.0, split_shift=True,
+                                  refine_batches=2),
     # domain-shift reset only: rate 1 on the shift batch, 1/2 on the next, then the usual 0.4
     "mixtta_ms224r": partial(MixTTAMS, shift_thr=10.0, alpha_min=0.4),
     "mixtta_ms224rp2": partial(MixTTAMS, shift_thr=10.0, alpha_min=0.4, prior_lambda=2.0),

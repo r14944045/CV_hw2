@@ -195,6 +195,44 @@ MixTTA-MS: domain-shift reset and class prior (`mixtta_ms224sp2`: Kaggle public 
   - A prior from the previous batch's predicted classes. Consecutive batches share classes, but this gains at most +0.3 pt on val in simulation, and stronger settings collapse.
   - Training more parameters: the fc layer, layer4 or layer3 + layer4 at lr 1e-5 is neutral, and layer4 at lr 1e-4 collapses (proxy 67.9 %).
   - A third input size, 192: val7 93.81 %, proxy 85.00 %.
+  - Re-tuning on the `mixtta_ms224sp2` base:
+    - source weight w = 0.3 / 0.7: val7 93.10 / 94.12 %, proxy 85.49 / 82.62 %;
+    - lr 2e-3 / 5e-4: 94.09 / 93.34 %, 84.61 / 84.40 %;
+    - LAME T = 1.5 / 3: 94.07 / 92.95 %, 85.23 / 80.68 %;
+    - 2 self-training steps: 93.63 %, 84.85 %;
+    - LAME with 10 neighbours collapses (val7 74.1 %).
+    None is better on both measures (base: 93.88 %, 85.29 %).
+
+MixTTA-MS: splitting the shift batch (`mixtta_ms224sp2cp`, `mixtta_ms224sp2cpr`; not yet scored):
+
+- Where `mixtta_ms224sp2`'s errors are inside a domain (proxy, 4 streams, seed 0):
+  - batches that contain a domain boundary: 72.3 % accuracy;
+  - the first full batch after a boundary: 81.1 %;
+  - the second: 84.2 %;
+  - the rest of the stream: 87.1 %.
+  The test stream, which has no labels, shows the same pattern in the mean confidence: 0.175, 0.177, 0.195 and 0.206.
+- Why the boundary batch hurts.
+  - At 5 of the 7 test boundaries that fall inside a batch, the shift detector fires on that mixed batch. The new domain's statistics then start from a batch that is partly the old domain, and that batch keeps weight 1/k in the running mean.
+  - Where the boundary falls in the batch matters. Dropping the first 16, 32 or 48 images of each proxy stream moves its boundaries within the batch, and `mixtta_ms224sp2` scores 85.29, 85.50, 83.64 and 82.18 % on the four versions (offsets 0–48).
+- Step 0c, the split.
+  - When the detector fires, one changepoint is fitted to the per-image conv1 statistics (channel means and log-variances) of the previous batch followed by the current one.
+  - This uses only the past and the current batch. It finds every proxy boundary within ±1 image and every test boundary (from the offline segmentation) within ±2.
+  - Rows before the changepoint are normalised with the old domain's statistics. The new domain's statistics start from the rows after it, and the running mean counts images instead of batches.
+- Step 5, the second pass. On the first 2 batches of a domain, the model self-trains first, then predicts the same views again. This adds one forward pass on about 18 of the 192 test batches.
+- Results (seed 0 / seed 1):
+
+  | | Proxy, mean of 4 offsets (%) | Proxy, offset 0 (%) | Val7 (%) | Test time (s) |
+  |---|---:|---:|---:|---:|
+  | `mixtta_ms224sp2` | 84.15 / 84.15 | 85.29 / 85.37 | 93.88 / 93.78 | 24.6 |
+  | + split (`sp2cp`) | 85.60 / 85.59 | 86.01 / 86.17 | 94.00 / 94.01 | 24.9 |
+  | + split + second pass (`sp2cpr`) | 86.19 / 86.09 | 86.39 / 86.49 | 94.00 / 94.14 | 26.2 |
+
+  - The second pass alone gives 84.43 / 84.82 / 84.87 % for 1 / 2 / 3 batches (seed 0).
+  - Self-training on all rows of the split batch instead of the new rows only gives the same result (85.56 %).
+- On test, without labels:
+  - the imbalance floor falls from 0.0420 (`sp2`) to 0.0377 (`sp2cp`) and 0.0375 (`sp2cpr`), and is lower for each of seeds 1–3;
+  - the predictions stay balanced: tree frog +23 to +55, at most 5.6 % per class in the late domains;
+  - against `mixtta_ms224sp2`, 2.4 % (`sp2cp`) and 2.7 % (`sp2cpr`) of the predictions change, and `sp2cp` and `sp2cpr` differ from each other by 0.85 %. Both use the same random draws as `sp2`, so a Kaggle score for either is a paired comparison with 0.92724. `sp2cp` is identical to `sp2` until the first split at batch 18; `sp2cpr` differs from the first batch on, because the second pass also covers the start of the stream.
 
 Why MixTTA outperforms RoTTA and CoTTA:
 

@@ -99,12 +99,12 @@ def M(name, **kw):
     return lambda model: f(model, **kw)
 
 
-def proxy(factory, mix=1.0, seed=0, verbose=True, streams=(0, 1, 2, 3), tag=""):
+def proxy(factory, mix=1.0, seed=0, verbose=True, streams=(0, 1, 2, 3), tag="", offset=0):
     """Run the 4 proxy streams; returns overall acc and per-corruption acc (12)."""
     d = data(f"proxy{mix}"); X, y, dom = d["x"], d["y"].numpy(), d["dom"].numpy(); L = d["stream_len"]
     correct = np.zeros(len(y), bool); ran = np.zeros(len(y), bool); t0 = time.time()
     for s in streams:
-        idx = np.arange(s * L, (s + 1) * L)
+        idx = np.arange(s * L + offset, (s + 1) * L)  # offset: drop the first images (moves the boundaries in the batch)
         p = run(factory, f"proxy{mix}", idx, seed=seed)
         correct[idx] = p == y[idx]; ran[idx] = True
     global LAST_CORRECT
