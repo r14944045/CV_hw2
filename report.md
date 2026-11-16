@@ -324,3 +324,28 @@ The final method, `mixtta_ms224sp2cpr` (Kaggle 0.93277), addresses each as follo
 - **Small updates.** Only the BN scale and shift are trained, at lr 1e-3, on soft targets. Training all weights collapsed to 33 % on the proxy.
 
 **Time.** bf16, fused views, training at 160 px only: 26 s on an RTX 5090 (limit: 90 s on a 3090).
+
+## Q4 Visualization
+
+![8 validation images with predicted and ground-truth labels](figures/val_examples.png)
+
+**Setup.**
+- The figure shows the final method, `mixtta_ms224sp2cpr`, from its harness val run: 94.93 %, 107 of 2,112 images wrong.
+- Green images are correct and red ones misclassified. Under each image are its position in the stream and its val domain.
+- The images were picked at random with a fixed seed. Each row takes one image per val domain plus a second from the scan-line grid domain.
+- `python tools/plot_val_examples.py` regenerates the figure.
+
+**Correct (top row).** Each survives a heavy corruption:
+- scan lines across the whole image (#530, #641);
+- a wave warp that breaks the fox's outline apart (#1285);
+- a small train inside the fisheye's black border (#1580).
+
+**Misclassified (bottom row).**
+- **#32, tree frog → tabby.** The frog is small, and the scan lines wash out its texture against the grey rocks.
+- **#210, container ship → steam locomotive.** Only part of the hull and a railing show under the coloured scan lines.
+- **#798, grand piano → acoustic guitar.** The warp turns the piano into curved wooden shapes, closer to another instrument.
+- **#1869, laptop → sports car.** The laptop is seen from behind (a white lid) and is small inside the black border.
+
+**Error distribution.**
+- The 107 errors are spread evenly over the val domains: 41 of 776, 34 of 724 and 32 of 612 images.
+- The most frequent confusions are among vehicles and the laptop (sports car ↔ laptop, sports car → airliner, fire engine ↔ sports car), and timber wolf → Siberian husky.
