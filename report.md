@@ -144,8 +144,13 @@ MixTTA notes:
   | `mixtta_st_notrain` | 89.81 | 88.78 | — |
   | `mixtta_st` | 90.35 | 89.16 | — |
   | `mixtta_st2` | 90.89 | 89.68 | — |
-- A labelled proxy for test. Val has 3 domains and test has 12, so I applied synthetic versions of the 11 other test corruptions to 768-image chunks of the val stream. The corruptions were blended 50/50 with the original image, and the chunks keep the val label order. It ranks the 6 methods already scored on Kaggle in almost the same order as Kaggle (Spearman 0.94; only `bn` and `bosa_stable_nomem` swap). It is harder than test (`mixtta`: 74.2 % on the proxy, 86.2 % on Kaggle). It preferred faster tracking (α = 0.4) and view-averaged LAME features (`mixtta_st_notrain`, proxy 78.2 %). Kaggle confirmed the gain: 0.86246 → 0.88981.
-- Self-training carries over to test. `mixtta_st2` scores 0.91 on Kaggle, against 0.88981 for `mixtta_st_notrain`; on val the gains are 1.05 pt (`mixtta_st`) and 1.80 pt (`mixtta_st2`). The proxy could not have predicted this. It reuses each val image about 4 times, and all of its training gain is on repeated images. On an image's first appearance, training is neutral to slightly negative (−0.3 and −0.9 pt). Neither collapses on the test stream (no domain's most-predicted class exceeds 9.2 %). Training all parameters instead (SGD, lr 1e-3) scored 90.31 % on val but collapsed to 33 % on the proxy.
+- A labelled proxy for test (`tools/dev/proxy.py`).
+  - Val has 3 domains and test has 12, so the proxy applies synthetic versions of the 12 test corruptions to the val images, blended 50/50 with the original.
+  - It has 4 streams. Each is the full val stream in val label order, with a different corruption on each of its 3 segments.
+  - It ranks the 5 Kaggle-scored MixTTA methods in the Kaggle order: `bn` 62.7 %, `mixtta` 73.5 %, `mixtta_st_notrain` 77.6 %, `mixtta_st2` 79.1 %, `mixtta_ms224` 80.1 %. It is harder than test.
+  - It preferred faster tracking (α = 0.4) and view-averaged LAME features, and Kaggle confirmed the gain (0.86246 → 0.88981).
+  - It overstated the gains of the later MixTTA-MS changes about 4×.
+- Self-training carries over to test. `mixtta_st2` scores 0.91 on Kaggle, against 0.88981 for `mixtta_st_notrain`; on val the gains are 1.05 pt (`mixtta_st`) and 1.80 pt (`mixtta_st2`). Neither collapses on the test stream (no domain's most-predicted class exceeds 9.2 %). Training all parameters instead (SGD, lr 1e-3) scored 90.31 % on val but collapsed to 33 % on the proxy.
 - Normalisation (`mixtta_srcbn`, `mixtta_tbn`, `mixtta_rbn`, `mixtta_w0`: `mixtta` with only the BN statistics changed). Robust BN → source-mixed BN gains 6.8 pt: +4.3 from faster tracking (α 0.05 → 0.2) and +2.6 from the source mix (w 0 → 0.5). With frozen source statistics, averaging and LAME add only 1.3 pt. These runs have the same compute as `mixtta`; their time and VRAM are not reported because the GPU was shared with other jobs.
 - Updating the statistics before predicting is worth 4.4 pt (`mixtta_lag` 84.66 → 89.06). With the opposite order, the first batch after each domain shift is normalised with the previous domain's statistics.
 - Strong CoTTA-style augmentations hurt here. Normalised with the stored statistics, they drop the scan-line domain from 86 % to 39–56 %. Normalised with each copy's own statistics, they are still worse than flip alone (83.9 vs 84.6 % mean over 7 orders). Mild flips and shifts help.
@@ -167,7 +172,7 @@ MixTTA-MS: domain-shift reset and class prior (`mixtta_ms224sp2`: Kaggle public 
   - If test domains are balanced too, `mixtta_ms224`'s predicted class counts imply at least 5.9 % error per domain, against about 8.4 % total error. Per domain the floor is: thermal 13.8 %, pixelation 9.8 %, noise 9.5 %, the other domains 2–7 %.
   - Tabby is under-predicted in every domain (0.3–0.9× its share).
   - Offline per-domain balancing (Sinkhorn on the LAME output, with oracle boundaries) gains only 0.5 pt on val, where the floors are small.
-- Shift reset (steps 0–0b in `tta/mixtta_ms.py`).
+- Shift reset (step 0).
   - The detector compares the KL divergence of the batch's conv1 statistics from the tracked ones with its median over the domain's last 8 batches. Above 10×, the batch's statistics replace the tracked ones.
   - It fires at all 11 test boundaries plus once inside a domain, and at all val and proxy boundaries. At two test boundaries (batches 35 and 118, where only a few images of the batch belong to the new domain) it fires one batch late.
   - The threshold of 10 was chosen while looking at the unlabelled test stream's boundaries, as well as val and the proxy.
@@ -178,13 +183,13 @@ MixTTA-MS: domain-shift reset and class prior (`mixtta_ms224sp2`: Kaggle public 
   - `mixtta_ms224s` (shift reset + running mean) ends at 100 % tree frog in the last domain. `mixtta_ms224r` (shift reset only) reaches +1120 tree-frog predictions.
   - `mixtta_ms224` itself drifts for 1 of 4 seeds (+1039).
   - The short proxy (33 batches) and the long proxy (132 batches, repeated images) did not predict which variants drift.
-- The class prior as a stabiliser (step 3b, λ = 2).
+- The class prior as a stabiliser (step 3, λ = 2).
   - The pseudo-labels then stay balanced, and so does self-training.
   - With the prior, both shift variants are stable for 4 seeds. The raw ensemble argmax before the prior also stays balanced (tree frog at 4.3–5.4 % in the late domains).
   - Results: proxy 85.24 / 85.29 % (`mixtta_ms224`: 80.13), long proxy 89.11 / 89.58 % (84.62), val7 93.51 / 93.88 % (93.34).
 - Tried and dropped on the proxy:
   - a blurred-input branch with its own statistics (mixed per domain, +50 % compute);
-  - training on the batch before predicting it (+1.2 pt for +70 % time);
+  - training on every batch before predicting it (+1.2 pt for +70 % time). The final method does this only on the first 2 batches of each domain (step 6);
   - 5 self-training steps or lr 2e-3 (worse);
   - a per-domain prior at λ = 2 (−2.3 pt).
 - Kaggle decomposition:
@@ -217,13 +222,13 @@ MixTTA-MS: splitting the shift batch (`mixtta_ms224sp2cpr`: Kaggle public 0.9327
 - Why the boundary batch hurts.
   - At 5 of the 7 test boundaries that fall inside a batch, the shift detector fires on that mixed batch. The new domain's statistics then start from a batch that is partly the old domain, and that batch keeps weight 1/k in the running mean.
   - Where the boundary falls in the batch matters. Dropping the first 16, 32 or 48 images of each proxy stream moves its boundaries within the batch, and `mixtta_ms224sp2` scores 85.29, 85.50, 83.64 and 82.18 % on the four versions (offsets 0–48).
-- Step 0c, the split.
+- The split (step 0).
   - When the detector fires, one changepoint is fitted to the per-image conv1 statistics (channel means and log-variances) of the previous batch followed by the current one.
   - This uses only the past and the current batch.
   - Measured on the method's own splits, it places every proxy split within ±1 image of the true boundary. On val, 7 of 9 splits are within ±1 and 2 are 10 images early. On test, all 7 are within ±2 of the offline segmentation.
   - When only a few images of the batch belong to the new domain, the detector usually fires one batch late. That batch is all new domain, so it needs no split.
   - Rows before the changepoint are normalised with the old domain's statistics. The new domain's statistics start from the rows after it, and the running mean counts images instead of batches.
-- Step 5, the second pass. On the first 2 batches of a domain, the model self-trains first, then predicts the same views again. This adds one forward pass on 18 of the 192 test batches.
+- The second pass (step 6). On the first 2 batches of a domain, the model self-trains first, then predicts the same views again. This adds one forward pass on 18 of the 192 test batches.
 - Results (seed 0 / seed 1):
 
   | | Proxy, mean of 4 offsets (%) | Proxy, offset 0 (%) | Val7 (%) | Test time (s) |
@@ -259,19 +264,19 @@ Why MixTTA outperforms RoTTA and CoTTA:
 MixTTA is built around three properties of this stream:
 - Short domains: 12 abrupt domain shifts of about 16 batches each.
 - Skewed batches: each batch of 64 holds only 5–17 of the 20 classes.
-- Training adds nothing here: removing the weight updates leaves RoTTA, BOSA (`lr=0`) and CoTTA (`cotta_noaug` = `bn`) at the same accuracy.
+- The baselines' training adds nothing here: removing the weight updates leaves RoTTA, BOSA (`lr=0`) and CoTTA (`cotta_noaug` = `bn`) at the same accuracy.
 
-It handles all three with forward passes only.
+Its first version (`mixtta`) handled all three with forward passes only. The final version adds self-training on its own LAME-corrected predictions and explicit handling of domain shifts.
 
-| | RoTTA | CoTTA | MixTTA |
-|---|---|---|---|
-| BN statistics | Slow EMA (α = 0.05), updated from the memory bank | Current batch only | Faster EMA (α = 0.2) mixed 50/50 with source statistics |
-| When statistics update | After predicting | Before predicting | Before predicting |
-| Prediction averaging | None | 32 strong augmentations, only when the source model is unsure | Flip + 4 small shifts, always |
-| Uses label skew at prediction | No (the memory bank uses it for training only) | No | Yes (LAME) |
-| Weight updates | BN affine parameters | All parameters | None |
-| Test time, RTX 5090 (s) | 15 | 68 | 21 |
-| Kaggle public | 0.65983 | 0.79117 | 0.86246 (`mixtta_st_notrain`: 0.88981; `mixtta_st2`: 0.91) |
+| | RoTTA | CoTTA | `mixtta` (first version) | `mixtta_ms224sp2cpr` (final) |
+|---|---|---|---|---|
+| BN statistics | Slow EMA (α = 0.05), updated from the memory bank | Current batch only | Faster EMA (α = 0.2) mixed 50/50 with source statistics | Running mean over the current domain, reset at detected shifts, mixed 50/50 with source statistics; one set per input size |
+| When statistics update | After predicting | Before predicting | Before predicting | Before predicting |
+| Prediction averaging | None | 32 strong augmentations, only when the source model is unsure | Flip + 4 small shifts, always | Flip + 2 small shifts at 160 and 224 px, always |
+| Uses label skew at prediction | No (the memory bank uses it for training only) | No | Yes (LAME) | Yes (LAME, plus a global class prior) |
+| Weight updates | BN affine parameters, on memory-bank samples | All parameters | None | BN affine parameters, on its own LAME-corrected predictions |
+| Test time, RTX 5090 (s) | 15 | 68 | 21 | 26 |
+| Kaggle public | 0.65983 | 0.79117 | 0.86246 | 0.93277 |
 
 1. BN statistics (val 83.19 % with this step alone, against 72.16 % for `bn` and 76.23 % for `rbn`).
    - CoTTA normalises with the current batch. With about 10 classes per batch, those statistics are noisy and depend on which classes happen to be present.
@@ -280,8 +285,13 @@ It handles all three with forward passes only.
    - It also updates before predicting. In the RoTTA order, the first batch after each shift is normalised with the previous domain's statistics, which costs 4.4 pt on val (`mixtta_lag`).
 2. Mild averaging (+3.2 pt, to 86.41 %). CoTTA's strong augmentations change image statistics and hurt on this data. Flips and small shifts keep the gain at 6 forward passes per batch instead of CoTTA's 33.
 3. LAME (+2.7 pt, to 89.06 %). Within a batch, similar-looking images should share a label. LAME pushes predictions towards the few classes the batch actually contains.
-4. No training in the submitted versions. The weight updates of RoTTA, BOSA and CoTTA brought no gain on this stream, only drift and time. Without them, MixTTA is fast and stable across the 12 domain shifts. Self-training on MixTTA's own LAME-corrected predictions does help. These targets are much more accurate than RoTTA's or CoTTA's pseudo-labels. `mixtta_st2` gains 1.80 pt on val and reaches 0.91 on Kaggle.
-5. Faster tracking and view-averaged LAME features (`mixtta_st_notrain`: +1.0 pt on val, +4.0 pt on the proxy, Kaggle 0.86246 → 0.88981).
+4. Self-training on better targets. The weight updates of RoTTA, BOSA and CoTTA brought no gain on this stream, only drift and time. Self-training on MixTTA's own LAME-corrected predictions does help, because these targets are much more accurate than RoTTA's or CoTTA's pseudo-labels. `mixtta_st2` gains 1.80 pt on val and reaches 0.91 on Kaggle.
+5. Faster tracking and view-averaged LAME features (`mixtta_st_notrain`: +1.0 pt on val, Kaggle 0.86246 → 0.88981).
+6. MixTTA-MS (Kaggle 0.91585 → 0.93277):
+   - a second input size;
+   - the global class prior, which keeps self-training stable;
+   - shift detection with a running mean per domain;
+   - the split of boundary batches and the second pass.
 
 Compared with BOSA, MixTTA keeps the mix of source and test statistics but separates the tracking rate from the pull towards the source. In BOSA both are set by one adaptive α_t, and that coupling caused the collapse at α_t ≈ 1.
 
