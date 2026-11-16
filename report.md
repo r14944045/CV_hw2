@@ -90,20 +90,17 @@ For each batch of 64:
 | `mixtta_st_notrain` | α = 0.4, w = 0.5; LAME on features averaged over all 6 views (still forward-only) | 90.10 | +35.55 | 4.3 | 2882 | 0.88981 |
 | `mixtta_st` | `mixtta_st_notrain` + self-training: 1 Adam step (lr 1e-3) per batch on BN γ/β, soft cross-entropy to the LAME output on a shifted copy | 91.15 | +36.60 | 5.6 | 3846 | — |
 | `mixtta_st2` | `mixtta_st` with 2 steps per batch | 91.90 | +37.35 | 6.7 | 3798 | 0.91 |
-
-## Q3 Strategy
-- **Source-mixed batch normalization:** Normalization uses a weighted combination of source statistics stored in the pretrained model and test statistics, controlled by the mixing weight \(w\). The test statistics are updated using an exponential moving average (EMA) of current-batch statistics and previous running estimates. Mixing source and test statistics balances adaptation to distribution shifts with preservation of the source reference, while EMA smoothing reduces sensitivity to the class composition of individual test batches. However, persistent class imbalance can still bias the tracked test statistics.
-- **Low-rank cross-channel mixing:** Standard batch normalization computes statistics and applies scale-and-shift transformations independently for each feature channel. However, distribution shifts can also alter correlations between channels. Following MixTTA (Jung et al., 2026), we incorporate low-rank cross-channel mixing modules into normalization layers to adapt these interactions with fewer trainable parameters than a full channel-mixing matrix.
-- Augmentation averaging
-
-
-
-
-
+| **MixTTA-MS** (ours) | | | | | | |
+| `mixtta_ms224` | `mixtta_st2` at input sizes 160 and 224, each with its own BN statistics, averaged; flip + 2 shifts per size, LAME on T = 2-softened probabilities, 3 Adam steps per batch at 160; bf16, deterministic cuDNN | 93.99 | +39.44 | 4.8 | 4150 | 0.91585 |
+| `mixtta_ms224p2` | + class prior: divide by (20 × each class's share of the predictions so far)^2, pseudo-count 2000 (step 3) | 94.08 | +39.53 | 4.6 | 4150 | 0.92366 |
+| `mixtta_ms224sp2` | + domain-shift reset (conv1 statistics jump > 10× the domain's recent median) and running-mean statistics within a domain, rate floored at 0.1 (step 0) | 94.46 | +39.91 | — | 4172 | 0.92724 |
+| `mixtta_ms224sp2cp` | + in-batch split of the shift batch at a changepoint; rows before it keep the old domain's statistics (step 0) | 94.84 | +40.29 | — | 4090 | — |
+| `mixtta_ms224sp2cpr` | + second pass on the first 2 batches of each domain: self-train, then predict again (step 6). **Best** | 94.93 | +40.38 | — | 4602 | 0.93277 |
 
 Notes:
 
 - The val stream is label-correlated: each batch of 64 contains 5–17 of the 20 classes (a shuffled stream would contain about 19).
+- Val times for `mixtta_ms224sp2`, `mixtta_ms224sp2cp` and `mixtta_ms224sp2cpr` are not reported. Their logged harness runs (13.9, 8.8 and 9.7 s) are slower than `mixtta_ms224`'s 4.8 s, but on the test stream they are no slower (24.6–26.2 s), so the GPU was busy during those val runs. Test-stream times are in the MixTTA-MS notes below.
 - RoTTA with `lr=0` (BN statistics and memory only, no gradient step) scores 64.96 %, within one image of full `rotta` (65.01). On val, the gap between `rotta` and `rbn` therefore comes from RoTTA's statistics path (statistics updated from the memory bank after each batch is predicted), not from the gradient updates.
 - Val gives only 33 updates. With EMA keep rates of 0.999, both teachers stay about 97 % source weights, and `cotta_noaug` matches `bn` exactly (72.16). Rankings may differ on the longer test stream.
 
@@ -289,3 +286,31 @@ It handles all three with forward passes only.
 Compared with BOSA, MixTTA keeps the mix of source and test statistics but separates the tracking rate from the pull towards the source. In BOSA both are set by one adaptive α_t, and that coupling caused the collapse at α_t ≈ 1.
 
 These choices fit this stream. On a long, single-domain, class-balanced stream, LAME and the source mix would help less, and self-training might matter more.
+
+## Q3 Strategy
+
+The test stream has three properties that break standard TTA:
+- **Distribution shift:** 12 corruption domains change abruptly, and 7 of the 11 boundaries fall inside a batch.
+- **Non-i.i.d. sampling:** each batch of 64 holds only 5–17 of the 20 classes.
+- **Length:** over 192 batches, self-training can drift.
+
+The final method, `mixtta_ms224sp2cpr` (Kaggle 0.93277), addresses each as follows. Gains are on val unless marked Kaggle.
+
+**Distribution shift**
+- **Source-mixed BN.** Each BN layer normalises with 50 % tracked test statistics and 50 % source statistics: the tracked half follows the domain, and the source half is an anchor no single batch can move (against Robust BN: +4.3 pt from faster tracking, +2.6 pt from the source mix).
+- **Update before predicting.** Each batch updates the statistics before it is predicted, so a new domain's first batch is not normalised with the old domain's statistics (+4.4 pt).
+- **Shift detection and reset.** A jump in the conv1 statistics (KL divergence > 10× the domain's recent median) starts a new domain: the tracked statistics restart from it, then follow a running mean (Kaggle +0.36).
+- **Splitting the boundary batch.** A changepoint on the per-image conv1 statistics finds where the new domain starts inside the batch. Images before it keep the old domain's statistics.
+- **Self-training and a second pass.** After each batch, 3 Adam steps on the BN scale and shift fit the model to its own corrected predictions (Kaggle 0.88981 → 0.91). On the first 2 batches of a domain, the model trains first and then predicts the batch again (with the split: Kaggle +0.55).
+- **Prediction averaging.** The softmax is averaged over flip and shift views (+3.2 pt) at input sizes 160 and 224, each size with its own BN statistics.
+
+**Non-i.i.d. sampling**
+- **No statistics from one batch alone.** A skewed batch's statistics depend on which classes it holds; averaging over the domain and the source keeps that bias small. CoTTA's current-batch statistics and RoTTA's slow EMA (about 20 batches to follow a shift) both do worse.
+- **LAME.** LAME uses the skew rather than fighting it. Each prediction moves towards those of its 5 nearest neighbours in feature space, so the batch concentrates on the few classes it contains (+2.7 pt).
+- **No memory bank.** RoTTA's and BOSA's class-balanced memory banks hurt here (removing them: +7.9 and +19 pt).
+
+**Error accumulation and collapse**
+- **Global class prior.** The stream is class-balanced overall, so each probability is divided by (20 × that class's share of the predictions so far)². Without it, self-training can drift into one class (up to 100 % "tree frog"); with it, every variant is stable across 4 seeds (Kaggle +0.78).
+- **Small updates.** Only the BN scale and shift are trained, at lr 1e-3, on soft targets. Training all weights collapsed to 33 % on the proxy.
+
+**Time.** bf16, fused views, training at 160 px only: 26 s on an RTX 5090 (limit: 90 s on a 3090).
