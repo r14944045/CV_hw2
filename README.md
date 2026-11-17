@@ -46,6 +46,7 @@ An earlier best, `mixtta_ms224` (0.91585, SHA-256 `75b92de5…`), is not stable 
 | Method | Kaggle public | Val (%) |
 |---|---:|---:|
 | `mixtta_ms224sp2cpr` | **0.93277** | 94.93 |
+| `mixtta_ms224sp3` | 0.92740 | — |
 | `mixtta_ms224sp2` | 0.92724 | 94.46 |
 | `mixtta_ms224p2` | 0.92366 | 94.08 |
 | `mixtta_ms224` | 0.91585 | 93.99 |
@@ -120,14 +121,14 @@ On Kaggle the class prior alone is worth +0.78 pt (`mixtta_ms224p2` 0.92366 agai
 
 | Method | Change | Val, 7 orders (%) | Proxy (%) | Test imbalance floor | Changed vs `sp2` | SHA-256 (first 16) |
 |---|---|---:|---:|---:|---:|---|
-| `mixtta_ms224sp3` | Class prior λ = 3 | — | 85.42 | 0.040 | 1.3 % | `090a4c960788f4e9` |
+| `mixtta_ms224sp3`: Kaggle 0.92740 | Class prior λ = 3 | — | 85.42 | 0.040 | 1.3 % | `090a4c960788f4e9` |
 | `mixtta_ms224sp2f` | Faster prior: pseudo-count 1000 | — | — | 0.041 | 1.2 % | `45dd36cb6cd0bae6` |
 | `mixtta_ms224sp2t` | Temporal prior: × (previous batch's mean LAME output + 0.1)^0.2 | 93.96 | 85.12 | 0.042 | 1.6 % | `889489681935c8c4` |
 | `mixtta_ms3sp2` | Third input size, 192 | 93.81 | 85.00 | 0.043 | 3.9 % | `5ea61220011130ee` |
 | `mixtta_ms224sp2` | — | 93.88 | 85.29 | 0.042 | — | `30dc0a8be78faf3d` |
 
 - **Offline evaluation cannot judge the prior settings.** The proxy predicted +3.6 pt for the class prior and Kaggle gave +0.78. Val is too short for the prior to act.
-- **`sp3` and `sp2f` are clean comparisons.** They follow the same random sequence as `sp2`, so they differ from it only through the prior setting, on 1.2–1.3 % of the predictions. A Kaggle score for either, compared with 0.92724, is a paired measurement of that setting.
+- **`sp3` and `sp2f` are clean comparisons.** They follow the same random sequence as `sp2`, so they differ from it only through the prior setting, on 1.2–1.3 % of the predictions. A Kaggle score for either, compared with 0.92724, is a paired measurement of that setting. `sp3` scored 0.92740 (+0.016 pt, about one image of the public half), so λ = 2 and λ = 3 are equivalent.
 - `sp2t` and `ms3sp2` show no offline gain. `ms3sp2` is also about 18 % slower.
 - All four are stable on test: no class above 5.6 % of the predictions in the late domains.
 
