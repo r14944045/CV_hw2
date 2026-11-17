@@ -59,7 +59,8 @@ class MixTTAMS:
                  lr=1e-3, steps=3, train_scale=0, amp=True, deterministic=True, prior_lambda=0.0, prior_tau=2000.0,
                  shift_thr=0.0, alpha_min=None, extra_train=(), extra_lr=1e-4, temporal_mu=0.0, temporal_eps=0.1,
                  split_shift=False, split_min=4, split_train="new", refine_batches=0,
-                 st_weight=None, st_pow=1.0, st_ent=None, ema_pred=0.0, refine_steps=None):
+                 st_weight=None, st_pow=1.0, st_ent=None, ema_pred=0.0, refine_steps=None,
+                 opt_reset=False):
         setup_cuda()
         if deterministic:  # fixed cuDNN algorithms: reruns give the same predictions (slower)
             torch.backends.cudnn.benchmark = False
@@ -79,6 +80,7 @@ class MixTTAMS:
         self.refine_batches, self._views = refine_batches, {}
         self.st_weight, self.st_pow, self.st_ent, self.ema_pred = st_weight, st_pow, st_ent, ema_pred
         self.refine_steps = refine_steps  # self-training steps on the second-pass batches (None: steps)
+        self.opt_reset = opt_reset  # clear Adam's moment estimates at a detected domain shift
         self.temporal_mu, self.temporal_eps, self.h_prev = temporal_mu, temporal_eps, None
         self.amp = torch.autocast("cuda", dtype=torch.bfloat16, enabled=amp)
         self._feats = None
@@ -164,6 +166,8 @@ class MixTTAMS:
                 self.shifts.append(self.t)
                 self.h_prev = None
                 self.dist_hist, self.k_dom, alpha = [], 0, 1.0
+                if self.opt_reset and self.opt is not None:
+                    self.opt.state.clear()
                 self.n_dom = 0
                 if self.split_shift:
                     self.j_old = self._changepoint()

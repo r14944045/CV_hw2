@@ -13,7 +13,7 @@ CFG.update({"conf": dict(C, st_weight="conf"), "conf2": dict(C, st_weight="conf"
             "ent04": dict(C, st_ent=0.4), "ent06": dict(C, st_ent=0.6),
             "ema05": dict(C, ema_pred=0.5), "ema08": dict(C, ema_pred=0.8),
             "rs6": dict(C, refine_steps=6), "rs6r3": dict(C, refine_steps=6, refine_batches=3),
-            "rs10": dict(C, refine_steps=10)})
+            "rs10": dict(C, refine_steps=10), "oreset": dict(C, opt_reset=True)})
 names = sys.argv[1].split(",") if len(sys.argv) > 1 else list(CFG)
 SEED = int(os.environ.get("SEED", 0))
 offs = (0, 16, 32, 48)
