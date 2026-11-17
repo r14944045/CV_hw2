@@ -6,10 +6,10 @@ Assignment spec: [HW2.md](HW2.md). Experiments and method write-ups: [report.md]
 
 | | |
 |---|---|
-| Method | `mixtta_ms224sp2cpr` (MixTTA-MS with domain-shift reset, an in-batch split of the shift batch, a class prior and a second pass after each shift). It is self-training MixTTA at input sizes 160 and 224, with separate BN statistics per size, flip + 2-shift averaging, LAME on T = 2-softened probabilities and 3 Adam steps per batch on BN γ/β at 160. Additions: online domain-shift detection that resets the tracked BN statistics, starting from the images after a changepoint found inside the batch; running-mean statistics within a domain; a global class-prior correction (λ = 2) that keeps self-training from drifting; and, on the first 2 batches of each domain, self-training before predicting the batch again. bf16, deterministic cuDNN |
-| Kaggle public | **0.93277** |
-| Val accuracy | 94.93 % (mean over 7 val stream orders: 94.00 %) |
-| Test-stream time | 26.2 s on an RTX 5090 (limit: 90 s on a 3090); peak VRAM 4.6 GB |
+| Method | `mixtta_ms224sp2cprl3` (MixTTA-MS with domain-shift reset, an in-batch split of the shift batch, a class prior, a second pass after each shift and per-stage self-training learning rates). It is self-training MixTTA at input sizes 160 and 224, with separate BN statistics per size, flip + 2-shift averaging, LAME on T = 2-softened probabilities and 3 Adam steps per batch on BN γ/β at 160. Additions: online domain-shift detection that resets the tracked BN statistics, starting from the images after a changepoint found inside the batch; running-mean statistics within a domain; a global class-prior correction (λ = 2) that keeps self-training from drifting; on the first 2 batches of each domain, self-training before predicting the batch again; and per-stage learning rates for the BN γ/β (3× the base 1e-3 for the stem, layer1 and layer2, 1× for layer3, 0.1× for layer4). bf16, deterministic cuDNN |
+| Kaggle public | **0.93831** |
+| Val accuracy | 95.60 % (mean over 7 val stream orders: 94.66 %) |
+| Test-stream time | 29.1 s on an RTX 5090, the same as `mixtta_ms224sp2cpr` measured right before it (28.8 s; 26.2 s on a quiet GPU). Limit: 90 s on a 3090. Peak VRAM 4.6 GB |
 | Code | [starter/tta/mixtta_ms.py](starter/tta/mixtta_ms.py), registered in [starter/methods.py](starter/methods.py) |
 
 ### Generate the submission file
@@ -17,7 +17,7 @@ Assignment spec: [HW2.md](HW2.md). Experiments and method write-ups: [report.md]
 Run from the repo root on a CUDA machine. It needs `data/` (unzipped from `ntu-cvpdl-2026-hw-2.zip`) and `source_resnet50_160.pth`.
 
 ```bash
-METHOD=mixtta_ms224sp2cpr
+METHOD=mixtta_ms224sp2cprl3
 cd starter
 python run.py --method $METHOD --split test --data ../data --ckpt ../source_resnet50_160.pth --out ../out/$METHOD
 cd ..
@@ -25,17 +25,17 @@ python tools/check_submission.py out/$METHOD     # format, run-log hash, time an
 sha256sum out/$METHOD/test_pred.csv
 ```
 
-The file to upload is `out/mixtta_ms224sp2cpr/test_pred.csv`.
+The file to upload is `out/mixtta_ms224sp2cprl3/test_pred.csv`.
 
-The submitted file's SHA-256 is `fb587264ef394f0121a348f7dff3f29ac28a16968291fe73684b123d1cc25c93`. It was produced with torch 2.13.0+cu129, seed 0, on an RTX 5090.
+The submitted file's SHA-256 is `4b5217d9336d2c875e5bff54be22fe9dbab42c54ec6c02f984e6d576ff793d8c`. It was produced with torch 2.13.0+cu129, seed 0, on an RTX 5090.
 
 The method uses deterministic cuDNN algorithms, so a rerun on the same GPU and software reproduces this hash exactly (checked with two harness runs). Reruns with seeds 1–3:
-- change 3.8–3.9 % of the test predictions;
-- stay class-balanced: tree frog +23 to +33 predictions, no class above 5.5 % in the late domains.
+- change 3.6–4.0 % of the test predictions;
+- stay class-balanced: tree frog +28 to +41 predictions, at most 10.4 % for one class in the thermal domain and 7.1 % in the late domains (timber wolf in the last domain).
 
 A different GPU (such as the TAs' 3090) should behave like another seed.
 
-The previous best, `mixtta_ms224sp2` (0.92724, SHA-256 `30dc0a8b…`), is the same method without the in-batch split and the second pass. Regenerate it with `METHOD=mixtta_ms224sp2`.
+The previous best, `mixtta_ms224sp2cpr` (0.93277, SHA-256 `fb587264…`), is the same method with one learning rate for all BN layers. Regenerate it with `METHOD=mixtta_ms224sp2cpr`.
 
 An earlier best, `mixtta_ms224` (0.91585, SHA-256 `75b92de5…`), is not stable across seeds: seed 3 drifts into predicting tree frog (+1039).
 
@@ -45,7 +45,8 @@ An earlier best, `mixtta_ms224` (0.91585, SHA-256 `75b92de5…`), is not stable 
 
 | Method | Kaggle public | Val (%) |
 |---|---:|---:|
-| `mixtta_ms224sp2cpr` | **0.93277** | 94.93 |
+| `mixtta_ms224sp2cprl3` | **0.93831** | 95.60 |
+| `mixtta_ms224sp2cpr` | 0.93277 | 94.93 |
 | `mixtta_ms224sp2cp` | 0.93180 | 94.84 |
 | `mixtta_ms224sp3` | 0.92740 | — |
 | `mixtta_ms224sp2` | 0.92724 | 94.46 |
@@ -61,7 +62,7 @@ An earlier best, `mixtta_ms224` (0.91585, SHA-256 `75b92de5…`), is not stable 
 | `rbn` | 0.70231 | 76.23 |
 | `rotta` | 0.65983 | 65.01 |
 
-Copies of the scored files are kept in [out/_submitted/](out/_submitted/) (except `mixtta_ms224`, `mixtta_ms224sp2`, `mixtta_ms224sp2cp` and `mixtta_ms224sp2cpr`, which reproduce exactly).
+Copies of the scored files are kept in [out/_submitted/](out/_submitted/) (except `mixtta_ms224`, `mixtta_ms224sp2`, `mixtta_ms224sp2cp`, `mixtta_ms224sp2cpr` and `mixtta_ms224sp2cprl3`, which reproduce exactly).
 
 - `mixtta_st2` (SHA-256 `2359887ab175d886…`) does not reproduce bit-for-bit. Reruns differ on 9–12 of the 12,288 predictions, so its reference copy is `out/_submitted/mixtta_st2_kaggle0.91.csv`.
 - `cotta` and `cotta_norst` take about 68 s on the test stream on an RTX 5090, so they may exceed the 90 s limit on a 3090.
@@ -95,7 +96,20 @@ On Kaggle the class prior alone is worth +0.78 pt (`mixtta_ms224p2` 0.92366 agai
   - Those reruns reproduced each file's SHA-256 exactly, and their run logs are the ones in `out/`.
   - Run time has not been measured on a 3090.
 
-### Splitting the shift batch (current best)
+### Per-stage self-training learning rates (current best)
+
+| Method | Multipliers ×1e-3 (stem, layer1, layer2, layer3, layer4) | Proxy, mean of 4 offsets (%), seeds 0 / 1 | Val, 7 orders (%), seeds 0 / 1 | Val, harness (%) | Test imbalance floor | Changed vs `sp2cpr` | SHA-256 (first 16) |
+|---|---|---:|---:|---:|---:|---:|---|
+| `mixtta_ms224sp2cprl3` (best): **Kaggle 0.93831** | 3, 3, 3, 1, 0.1 | 87.53 / 87.57 | 94.66 / 94.74 | 95.60 | 0.0352 | 3.7 % | `4b5217d9336d2c87` |
+| `mixtta_ms224sp2cprl` | 2, 2, 2, 1, 0.25 | 86.98 / 86.84 | 94.39 / 94.46 | 95.17 | 0.0351 | 2.9 % | `dc8b0a4dc3267252` |
+| `mixtta_ms224sp2cpr` (Kaggle 0.93277) | 1, 1, 1, 1, 1 | 86.19 / 86.09 | 94.00 / 94.14 | 94.93 | 0.0375 | — | `fb587264ef394f01` |
+
+- **The change.** Self-training (3 Adam steps on the BN γ/β) gets one learning rate per ResNet stage (option `stage_lr`, step 4b in [starter/tta/mixtta_ms.py](starter/tta/mixtta_ms.py)). It adds no time and no random draws.
+- **Kaggle.** `mixtta_ms224sp2cprl3` scored 0.93831, +0.55 pt over `mixtta_ms224sp2cpr`. `mixtta_ms224sp2cprl` is not scored.
+- **How it was found.** A multi-agent search ran 6 idea angles, 3 judges and 6 implementations ([tools/dev/r5/](tools/dev/r5/)). Only this idea beat `sp2cpr` at both seeds; the rest were flat or worse.
+- **Limit.** 2× or more on layer3, or 0.5× on layer4, partly collapses the thermal test domain (up to 24 % one class). The proxy misses this because its streams are only 33 batches long.
+
+### Splitting the shift batch
 
 | Method | Change | Proxy, mean of 4 offsets (%), seeds 0 / 1 | Val, 7 orders (%), seeds 0 / 1 | Val, harness (%) | Test imbalance floor | Changed vs `sp2` | Test time on RTX 5090 (s) | SHA-256 (first 16) |
 |---|---|---:|---:|---:|---:|---:|---:|---|

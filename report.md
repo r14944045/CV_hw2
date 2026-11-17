@@ -29,12 +29,13 @@ It would be fine to copy the figure from the referred paper.
   - Cons:
 
 ## Q2 Method
-Best model: `mixtta_ms224sp2cpr` (`starter/tta/mixtta_ms.py`), Kaggle public 0.93277, val 94.93 %.
-- The previous best, `mixtta_ms224sp2` (0.92724), is the same method without the in-batch split (step 0, last part) and the second pass (step 6).
+Best model: `mixtta_ms224sp2cprl3` (`starter/tta/mixtta_ms.py`), Kaggle public 0.93831, val 95.60 %.
+- The previous best, `mixtta_ms224sp2cpr` (0.93277), is the same method with one learning rate for all BN layers (step 5).
+- `mixtta_ms224sp2` (0.92724) also lacks the in-batch split (step 0, last part) and the second pass (step 6).
 - `mixtta_ms224` (0.91585) also lacks the shift detection and the class prior (steps 0 and 3).
 
 - Backbone model: ResNet-50, the provided 160 px source checkpoint. Every BN layer is replaced by a source-mixed BN layer (w = 0.5) with one statistics tracker per input size.
-- Learning rate: 1e-3, constant (Adam), on the BN scale and shift only.
+- Learning rate: constant (Adam), on the BN scale and shift only. The base rate of 1e-3 is scaled per ResNet stage: 3× for the stem, layer1 and layer2, 1× for layer3 and 0.1× for layer4.
 
 For each batch of 64:
 0. Domain-shift detection. If the batch's conv1 statistics diverge from the tracked ones by more than 10× the domain's recent median, a new domain starts.
@@ -45,7 +46,7 @@ For each batch of 64:
 2. Average over both sizes.
 3. Class prior: divide the probabilities by (20 × the share of each class predicted so far)^2, with a pseudo-count of 2000 images. The test stream is class-balanced overall.
 4. Apply LAME (k = 5, temperature T = 2) and predict the argmax.
-5. Train: soft cross-entropy between the LAME output and the model's output on a shifted copy at 160 px, 3 steps.
+5. Train: soft cross-entropy between the LAME output and the model's output on a shifted copy at 160 px, 3 steps, with the per-stage learning rates above.
 6. Second pass, on the first 2 batches of each domain only (18 of the 192 test batches): train first (step 5), then predict the same views again with the updated BN scale and shift.
 
 ## Experiments
@@ -95,7 +96,9 @@ For each batch of 64:
 | `mixtta_ms224p2` | + class prior: divide by (20 × each class's share of the predictions so far)^2, pseudo-count 2000 (step 3) | 94.08 | +39.53 | 4.6 | 4150 | 0.92366 |
 | `mixtta_ms224sp2` | + domain-shift reset (conv1 statistics jump > 10× the domain's recent median) and running-mean statistics within a domain, rate floored at 0.1 (step 0) | 94.46 | +39.91 | — | 4172 | 0.92724 |
 | `mixtta_ms224sp2cp` | + in-batch split of the shift batch at a changepoint; rows before it keep the old domain's statistics (step 0) | 94.84 | +40.29 | — | 4090 | 0.93180 |
-| `mixtta_ms224sp2cpr` | + second pass on the first 2 batches of each domain: self-train, then predict again (step 6). **Best** | 94.93 | +40.38 | — | 4602 | 0.93277 |
+| `mixtta_ms224sp2cpr` | + second pass on the first 2 batches of each domain: self-train, then predict again (step 6) | 94.93 | +40.38 | — | 4602 | 0.93277 |
+| `mixtta_ms224sp2cprl` | + per-stage learning rates ×(2, 2, 2, 1, 0.25) for stem, layer1–layer4 (step 5) | 95.17 | +40.62 | — | 4624 | — |
+| `mixtta_ms224sp2cprl3` | per-stage learning rates ×(3, 3, 3, 1, 0.1). **Best** | 95.60 | +41.05 | — | 4624 | 0.93831 |
 
 Notes:
 
@@ -267,6 +270,34 @@ MixTTA-MS: splitting the shift batch (`mixtta_ms224sp2cp`: Kaggle public 0.93180
     - the split gives +0.46;
     - the second pass gives +0.10, about 6 images of the public half. That is at the edge of the ±0.1 pt noise for two files that differ on 0.85 % of the predictions, so the second pass's gain is not clearly measurable.
 
+MixTTA-MS: per-stage learning rates (`mixtta_ms224sp2cprl3`: Kaggle public 0.93831, +0.55 pt over `mixtta_ms224sp2cpr`):
+
+- How it was found. A multi-agent search proposed 18 ideas from 6 angles, and 3 judges picked 6 to implement:
+  - feature-centred LAME;
+  - two depth-dependent source weights;
+  - re-predicting with the trained student;
+  - TRIBE-style class-balanced BN;
+  - per-stage learning rates for self-training.
+  Only the last improved on both the proxy and val. The others were flat or worse.
+- The change. Self-training keeps the same 3 Adam steps on the BN scale and shift, but each ResNet stage gets its own learning rate. It adds no time and no random draws, so its Kaggle score is a paired comparison with `mixtta_ms224sp2cpr`.
+- Results (proxy mean of 4 offsets and val7, seeds 0 / 1; `mixtta_ms224sp2cpr`: 86.19 / 86.09, 94.00 / 94.14):
+
+  | Multipliers (stem, layer1, layer2, layer3, layer4) | Proxy | Val7 | Largest class share in the thermal test domain |
+  |---|---:|---:|---:|
+  | 1, 1, 1, 1, 1 (`sp2cpr`) | 86.19 / 86.09 | 94.00 / 94.14 | 0.110 |
+  | 2, 2, 2, 1, 0.25 (`sp2cprl`) | 86.98 / 86.84 | 94.39 / 94.46 | 0.095 |
+  | 3, 3, 3, 1, 0.1 (`sp2cprl3`) | 87.53 / 87.57 | 94.66 / 94.74 | 0.098 |
+  | 3, 3, 3, 2, 0.25 | 87.75 | 94.78 | 0.118 |
+  | 3, 3, 3, 3, 0.25 | 87.19 | 94.07 | 0.239 |
+  | 4, 4, 4, 2, 0.25 | 87.82 | 94.66 | 0.202 |
+
+- Why. The early stages see low-level, corruption-specific statistics and can adapt faster. Layer4's scale and shift act directly on class evidence: a high rate there amplifies pseudo-label errors, and a global lr of 2e-3 had hurt.
+- Limit. A rate of 2× or more on layer3 partly collapses the thermal domain on test (up to 24 % of it predicted as one class). The proxy cannot show this because its streams are only 33 batches long, so every setting was also checked on the test stream.
+- Stability. `sp2cprl3` is stable for seeds 0–3 on test:
+  - the imbalance floor is 0.035–0.037, against 0.035–0.038 for `sp2cpr`;
+  - the largest class share is 0.104 in thermal and at most 0.071 in the late domains (timber wolf in the last domain).
+- Kaggle. `mixtta_ms224sp2cprl3` scored 0.93831 against 0.93277, with 3.7 % of the predictions changed. The proxy predicted +1.4, so it again overstated the gain, by about 2.5×.
+
 Why MixTTA outperforms RoTTA and CoTTA:
 
 MixTTA is built around three properties of this stream:
@@ -329,7 +360,7 @@ The final method, `mixtta_ms224sp2cpr` (Kaggle 0.93277), addresses each as follo
 
 **Error accumulation and collapse**
 - **Global class prior.** The stream is class-balanced overall, so each probability is divided by (20 × that class's share of the predictions so far)². Without it, self-training can drift into one class (up to 100 % "tree frog"); with it, every variant is stable across 4 seeds (Kaggle +0.78).
-- **Small updates.** Only the BN scale and shift are trained, at lr 1e-3, on soft targets. Training all weights collapsed to 33 % on the proxy.
+- **Small, depth-aware updates.** Only the BN scale and shift are trained, on soft targets: early stages at 3× the base rate of 1e-3, layer4 at 0.1× (Kaggle +0.55). Training all weights collapsed to 33 % on the proxy.
 
 **Time.** bf16, fused views, training at 160 px only: 26 s on an RTX 5090 (limit: 90 s on a 3090).
 
