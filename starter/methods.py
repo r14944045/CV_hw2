@@ -79,6 +79,11 @@ METHODS = {
     # + on the first 2 batches of a domain: self-train first, then predict again with the updated gamma/beta (step 5)
     "mixtta_ms224sp2cpr": partial(MixTTAMS, shift_thr=10.0, alpha_min=0.1, prior_lambda=2.0, split_shift=True,
                                   refine_batches=2),
+    # + per-stage self-training learning rates (step 4b): x(stem, layer1, layer2, layer3, layer4)
+    "mixtta_ms224sp2cprl": partial(MixTTAMS, shift_thr=10.0, alpha_min=0.1, prior_lambda=2.0, split_shift=True,
+                                   refine_batches=2, stage_lr=(2, 2, 2, 1, 0.25)),
+    "mixtta_ms224sp2cprl3": partial(MixTTAMS, shift_thr=10.0, alpha_min=0.1, prior_lambda=2.0, split_shift=True,
+                                    refine_batches=2, stage_lr=(3, 3, 3, 1, 0.1)),
     # domain-shift reset only: rate 1 on the shift batch, 1/2 on the next, then the usual 0.4
     "mixtta_ms224r": partial(MixTTAMS, shift_thr=10.0, alpha_min=0.4),
     "mixtta_ms224rp2": partial(MixTTAMS, shift_thr=10.0, alpha_min=0.4, prior_lambda=2.0),

@@ -39,6 +39,10 @@ For each incoming batch x:
   4. Self-training: `steps` Adam steps on the BN scale/shift (gamma, beta), soft cross-entropy between
      the LAME output and the model's output on a random flip + shift copy of x at size
      sizes[train_scale] (the native 160 by default; training at a larger size drifted on long streams).
+  4b. (stage_lr = 5 multipliers for stem, layer1 .. layer4) Per-stage learning rates for step 4. The early
+     stages see low-level, corruption-specific statistics and can adapt faster; layer4's affine parameters
+     act directly on class evidence, and a high rate there destabilises self-training (a global lr of 2e-3
+     hurt, while 3x on stem-layer2 with 0.25x on layer4 helps). 0 freezes a stage.
   5. (refine_batches = R) On the first R batches of a domain (not on a split batch), step 4 runs before the
      prediction: the batch is predicted, the model self-trains on that prediction, and the same views are
      predicted again (eval mode) with the updated gamma/beta. Costs one extra forward on those batches only.
@@ -60,7 +64,7 @@ class MixTTAMS:
                  shift_thr=0.0, alpha_min=None, extra_train=(), extra_lr=1e-4, temporal_mu=0.0, temporal_eps=0.1,
                  split_shift=False, split_min=4, split_train="new", refine_batches=0,
                  st_weight=None, st_pow=1.0, st_ent=None, ema_pred=0.0, refine_steps=None,
-                 opt_reset=False):
+                 opt_reset=False, stage_lr=None):
         setup_cuda()
         if deterministic:  # fixed cuDNN algorithms: reruns give the same predictions (slower)
             torch.backends.cudnn.benchmark = False
@@ -93,7 +97,22 @@ class MixTTAMS:
                      if not any(p is q for q in params)]
             for p in params + extra:
                 p.requires_grad_(True)
-            groups = [dict(params=params, lr=lr)] + ([dict(params=extra, lr=extra_lr)] if extra else [])
+            if stage_lr is None:
+                groups = [dict(params=params, lr=lr)]
+            else:  # 4b: per-stage learning rates, lr x stage_lr[stage] for stem, layer1 .. layer4 (0 freezes a stage)
+                names = {id(m): n for n, m in self.model.named_modules()}
+                by_stage = [[] for _ in range(5)]
+                for l in self.layers:
+                    n = names[id(l)]
+                    by_stage[0 if n == "bn1" else int(n[5])] += [l.weight, l.bias]
+                groups = []
+                for mult, ps in zip(stage_lr, by_stage):
+                    if mult == 0:
+                        for q in ps:
+                            q.requires_grad_(False)
+                    elif ps:
+                        groups.append(dict(params=ps, lr=lr * mult))
+            groups += [dict(params=extra, lr=extra_lr)] if extra else []
             self.opt = torch.optim.Adam(groups, lr=lr)
             self._params = params
             self._ema = [p.detach().clone() for p in params] if ema_pred else None
