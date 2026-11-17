@@ -3,7 +3,7 @@
 Uses a harness val run (out/val_exp/<method>/val_pred.csv). Images are picked at random (fixed seed), round-robin
 over the 3 val domains, so each domain appears in both rows.
 
-  python tools/plot_val_examples.py [--method mixtta_ms224sp2cpr] [--out figures/val_examples.png]
+  python tools/plot_val_examples.py [--method mixtta_ms224sp2cprl3] [--out figures/val_examples.png]
 """
 import argparse
 import os
@@ -32,7 +32,7 @@ def pick(pos, dom, n, rng):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--method", default="mixtta_ms224sp2cpr")
+    ap.add_argument("--method", default="mixtta_ms224sp2cprl3")
     ap.add_argument("--out", default=os.path.join(ROOT, "figures", "val_examples.png"))
     ap.add_argument("--seed", type=int, default=0)
     a = ap.parse_args()

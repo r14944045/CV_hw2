@@ -369,22 +369,22 @@ The final method, `mixtta_ms224sp2cpr` (Kaggle 0.93277), addresses each as follo
 ![8 validation images with predicted and ground-truth labels](figures/val_examples.png)
 
 **Setup.**
-- The figure shows the final method, `mixtta_ms224sp2cpr`, from its harness val run: 94.93 %, 107 of 2,112 images wrong.
+- The figure shows the final method, `mixtta_ms224sp2cprl3`, from its harness val run: 95.60 %, 93 of 2,112 images wrong.
 - Green images are correct and red ones misclassified. Under each image are its position in the stream and its val domain.
 - The images were picked at random with a fixed seed. Each row takes one image per val domain plus a second from the scan-line grid domain.
 - `python tools/plot_val_examples.py` regenerates the figure.
 
 **Correct (top row).** Each survives a heavy corruption:
-- scan lines across the whole image (#530, #641);
-- a wave warp that breaks the fox's outline apart (#1285);
-- a small train inside the fisheye's black border (#1580).
+- dense scan lines over the whole image (#526 flamingo, #636 red fox);
+- a wave warp that smears the locomotive into its smoke (#1345);
+- a husky squeezed inside the fisheye's black border (#1567).
 
 **Misclassified (bottom row).**
-- **#32, tree frog → tabby.** The frog is small, and the scan lines wash out its texture against the grey rocks.
-- **#210, container ship → steam locomotive.** Only part of the hull and a railing show under the coloured scan lines.
-- **#798, grand piano → acoustic guitar.** The warp turns the piano into curved wooden shapes, closer to another instrument.
-- **#1869, laptop → sports car.** The laptop is seen from behind (a white lid) and is small inside the black border.
+- **#173, red fox → timber wolf.** The scan lines wash out the fox's orange coat, leaving a wolf-like canid shape in a forest.
+- **#606, sports car → teapot.** A night shot: under the scan lines only the headlights and a curved, shiny body remain.
+- **#896, tabby → steam locomotive.** The warp turns the cat's stripes into wavy dark streaks, like smoke and metal.
+- **#1857, laptop → sports car.** The laptop is small, seen from the side in a classroom, and shrunk by the fisheye.
 
 **Error distribution.**
-- The 107 errors are spread evenly over the val domains: 41 of 776, 34 of 724 and 32 of 612 images.
-- The most frequent confusions are among vehicles and the laptop (sports car ↔ laptop, sports car → airliner, fire engine ↔ sports car), and timber wolf → Siberian husky.
+- The 93 errors are spread evenly over the val domains: 34 of 776, 32 of 724 and 27 of 612 images.
+- The most frequent confusions are among vehicles and the laptop (sports car → airliner, sports car ↔ laptop, sports car ↔ fire engine) and between the timber wolf and the Siberian husky (both directions).
