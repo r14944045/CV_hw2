@@ -45,7 +45,9 @@ def factory(cls_spec, kw):
 
 def test_check(fac, holder, seed):
     floor = lambda q: np.clip(np.bincount(q, minlength=20) - len(q) / 20, 0, None).sum() / len(q)  # noqa: E731
-    torch.cuda.synchronize(); t0 = time.time()
+    if fe.DEVICE == "cuda":
+        torch.cuda.synchronize()
+    t0 = time.time()
     p = fe.run(fac, "test", seed=seed)
     sec = time.time() - t0
     tb = fe.data("test")["bounds"]
@@ -57,7 +59,7 @@ def test_check(fac, holder, seed):
                maxshare_dom=[round(float(np.bincount(p[a:b], minlength=20).max() / (b - a)), 3) for a, b in doms],
                maxshare_late=round(float(np.bincount(late, minlength=20).max() / len(late)), 3),
                frog_excess=int((p == 7).sum() - len(p) // 20),
-               peak_mem_gb=round(torch.cuda.max_memory_allocated() / 2 ** 30, 2))
+               peak_mem_gb=round(torch.cuda.max_memory_allocated() / 2 ** 30, 2) if fe.DEVICE == "cuda" else None)
     m = holder.get("m")
     if m is not None and hasattr(m, "shifts"):
         out["shifts"] = list(m.shifts)
@@ -76,7 +78,7 @@ def main():
     kw = dict(BASE, **json.loads(a.kw))
     fac, holder = factory(a.cls, kw)
     t0 = time.time()
-    rec = dict(tag=a.tag, cls=a.cls, kw=kw, seed=a.seed, quick=a.quick)
+    rec = dict(tag=a.tag, cls=a.cls, kw=kw, seed=a.seed, quick=a.quick, device=fe.DEVICE)
     offs = (0,) if a.quick else OFFSETS
     px = []
     for o in offs:

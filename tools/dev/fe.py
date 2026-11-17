@@ -13,8 +13,9 @@ import tta.mixtta_ms as mm  # noqa
 from methods import METHODS  # noqa
 
 SP = os.environ.get("HW2_DEV_CACHE", os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache")) + "/"
-MEAN = torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1).cuda()
-STD = torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1).cuda()
+DEVICE = os.environ.get("HW2_DEVICE", "cuda")  # HW2_DEVICE=cpu runs everything on the CPU (fp32)
+MEAN = torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1).to(DEVICE)
+STD = torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1).to(DEVICE)
 _cache = {}
 
 
@@ -41,7 +42,7 @@ def load_model():
     ck = torch.load(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../source_resnet50_160.pth"), map_location="cpu", weights_only=False)
     m = getattr(torchvision.models, ck["arch"])(num_classes=len(ck["wnids"]))
     m.load_state_dict(ck["state_dict"])
-    return m.cuda()
+    return m.to(DEVICE)
 
 
 REC = []
@@ -65,12 +66,13 @@ def run(factory, split="val", idx=None, seed=0, rec=False, x=None):
     mm.lame = _rec_lame if rec else _orig_lame
     preds = []
     for k in range(0, len(idx), 64):
-        xb = X[idx[k:k + 64]].cuda(non_blocking=True)
+        xb = X[idx[k:k + 64]].to(DEVICE, non_blocking=True)
         xb = (xb.float() / 255 - MEAN) / STD
         p = meth(xb)
         preds.append(p.detach().cpu().numpy() if torch.is_tensor(p) else np.asarray(p))
     mm.lame = _orig_lame
-    torch.cuda.synchronize()
+    if DEVICE == "cuda":
+        torch.cuda.synchronize()
     return np.concatenate(preds)
 
 
