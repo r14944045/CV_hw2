@@ -8,6 +8,12 @@ CFG = {"base": B, "split": dict(B, split_shift=True), "split_all": dict(B, split
        "split_m8": dict(B, split_shift=True, split_min=8),
        "ref1": dict(B, refine_batches=1), "ref2": dict(B, refine_batches=2), "ref3": dict(B, refine_batches=3),
        "split_ref2": dict(B, split_shift=True, refine_batches=2)}
+C = CFG["split_ref2"]  # mixtta_ms224sp2cpr
+CFG.update({"conf": dict(C, st_weight="conf"), "conf2": dict(C, st_weight="conf", st_pow=2.0),
+            "ent04": dict(C, st_ent=0.4), "ent06": dict(C, st_ent=0.6),
+            "ema05": dict(C, ema_pred=0.5), "ema08": dict(C, ema_pred=0.8),
+            "rs6": dict(C, refine_steps=6), "rs6r3": dict(C, refine_steps=6, refine_batches=3),
+            "rs10": dict(C, refine_steps=10)})
 names = sys.argv[1].split(",") if len(sys.argv) > 1 else list(CFG)
 SEED = int(os.environ.get("SEED", 0))
 offs = (0, 16, 32, 48)

@@ -43,6 +43,8 @@ For each incoming batch x:
      prediction: the batch is predicted, the model self-trains on that prediction, and the same views are
      predicted again (eval mode) with the updated gamma/beta. Costs one extra forward on those batches only.
 """
+import math
+
 import torch
 import torch.nn.functional as F
 
@@ -56,7 +58,8 @@ class MixTTAMS:
     def __init__(self, model, alpha=0.4, w=0.5, sizes=(160, 224), flip=True, n_shift=2, knn=5, lame_T=2.0,
                  lr=1e-3, steps=3, train_scale=0, amp=True, deterministic=True, prior_lambda=0.0, prior_tau=2000.0,
                  shift_thr=0.0, alpha_min=None, extra_train=(), extra_lr=1e-4, temporal_mu=0.0, temporal_eps=0.1,
-                 split_shift=False, split_min=4, split_train="new", refine_batches=0):
+                 split_shift=False, split_min=4, split_train="new", refine_batches=0,
+                 st_weight=None, st_pow=1.0, st_ent=None, ema_pred=0.0, refine_steps=None):
         setup_cuda()
         if deterministic:  # fixed cuDNN algorithms: reruns give the same predictions (slower)
             torch.backends.cudnn.benchmark = False
@@ -74,11 +77,13 @@ class MixTTAMS:
         self.split_shift, self.split_min, self.split_train = split_shift, split_min, split_train
         self.n_dom, self.f_prev, self.j_old, self.splits = 0, None, 0, []
         self.refine_batches, self._views = refine_batches, {}
+        self.st_weight, self.st_pow, self.st_ent, self.ema_pred = st_weight, st_pow, st_ent, ema_pred
+        self.refine_steps = refine_steps  # self-training steps on the second-pass batches (None: steps)
         self.temporal_mu, self.temporal_eps, self.h_prev = temporal_mu, temporal_eps, None
         self.amp = torch.autocast("cuda", dtype=torch.bfloat16, enabled=amp)
         self._feats = None
         self.model.fc.register_forward_hook(lambda m, inp, out: setattr(self, "_feats", inp[0].detach()))
-        self.opt = None
+        self.opt, self._ema, self._live = None, None, None
         if lr > 0 and steps > 0:
             params = [p for l in self.layers for p in (l.weight, l.bias)]
             # extra_train: names of submodules (e.g. "fc", "layer4") whose remaining weights also train, at extra_lr
@@ -88,6 +93,29 @@ class MixTTAMS:
                 p.requires_grad_(True)
             groups = [dict(params=params, lr=lr)] + ([dict(params=extra, lr=extra_lr)] if extra else [])
             self.opt = torch.optim.Adam(groups, lr=lr)
+            self._params = params
+            self._ema = [p.detach().clone() for p in params] if ema_pred else None
+            self._live = None
+
+    @torch.no_grad()
+    def _use_ema(self, on):
+        """ema_pred: predict with an exponential moving average of the BN scale/shift, train the live copy."""
+        if self._ema is None:
+            return
+        if on and self._live is None:
+            self._live = [p.detach().clone() for p in self._params]
+            for p, e in zip(self._params, self._ema):
+                p.copy_(e)
+        elif not on and self._live is not None:
+            for p, q in zip(self._params, self._live):
+                p.copy_(q)
+            self._live = None
+
+    @torch.no_grad()
+    def _update_ema(self):
+        if self._ema is not None:
+            for p, e in zip(self._params, self._ema):
+                e.mul_(self.ema_pred).add_(p.detach(), alpha=1 - self.ema_pred)
 
     def _set_tracker(self, k, stat_rows=None, alpha=None):
         for l in self.layers:
@@ -199,6 +227,7 @@ class MixTTAMS:
     def __call__(self, x):
         self.j_old = 0
         alpha = self._tracking_rate(x)
+        self._use_ema(True)
         if self.j_old:
             out = [self._scale_forward_split(self._resize(x, s), k, self.j_old) for k, s in enumerate(self.sizes)]
         else:
@@ -206,13 +235,18 @@ class MixTTAMS:
         z = self._predict(out)
         refine = self.refine_batches and not self.j_old and self.k_dom <= self.refine_batches and self.opt is not None
         if refine:  # 5: first batches of a domain: train on this batch, then predict it again with the new gamma/beta
-            self.self_train(x, z)
+            self._use_ema(False)
+            self.self_train(x, z, steps=self.refine_steps)
+            self._update_ema()
+            self._use_ema(True)
             z = self._predict([self._eval_views(k, x.size(0)) for k in range(len(self.sizes))])
+        self._use_ema(False)
         pred = z.argmax(1)
         self.counts += torch.bincount(pred, minlength=z.size(1)).float()
         self.n_seen += pred.numel()
         if self.opt is not None and not refine:
             self.self_train(x, z, rows=self.j_old if self.split_train == "new" else 0)
+            self._update_ema()
         return pred
 
     @torch.no_grad()
@@ -243,18 +277,31 @@ class MixTTAMS:
         self.h_prev = z.mean(0)
         return z
 
-    def self_train(self, x, target, rows=0):
+    def _st_weights(self, t):
+        """Per-image weights of the self-training loss (None: uniform). st_weight="conf": (max_c t)^st_pow.
+        st_ent: drop images whose target entropy exceeds st_ent * log C."""
+        if self.st_weight is None and self.st_ent is None:
+            return None
+        w = t.max(1).values.pow(self.st_pow) if self.st_weight == "conf" else torch.ones_like(t[:, 0])
+        if self.st_ent is not None:
+            H = -(t * torch.log(t + 1e-10)).sum(1)
+            w = w * (H < self.st_ent * math.log(t.size(1))).float()
+        return w
+
+    def self_train(self, x, target, rows=0, steps=None):
         """Step 4: eval mode (the stored statistics of tracker `train_scale` are used, not updated).
         rows > 0: train on rows[rows:] only (the new domain's part of a split batch)."""
         k = self.train_scale
         self._set_tracker(k)
         xs = self._resize(x, self.sizes[k])
         m = self.model.eval()
-        for _ in range(self.steps):
+        for _ in range(self.steps if steps is None else steps):
             xv = random_shift(xs)[rows:]
             with self.amp:
                 logits = m(xv.contiguous(memory_format=torch.channels_last))
-            loss = -(target[rows:] * logits.float().log_softmax(1)).sum(1).mean()
+            ce = -(target[rows:] * logits.float().log_softmax(1)).sum(1)
+            w = self._st_weights(target[rows:])
+            loss = ce.mean() if w is None else (w * ce).sum() / w.sum().clamp_min(1e-6)
             self.opt.zero_grad(set_to_none=True)
             loss.backward()
             self.opt.step()
