@@ -46,6 +46,7 @@ An earlier best, `mixtta_ms224` (0.91585, SHA-256 `75b92de5…`), is not stable 
 | Method | Kaggle public | Val (%) |
 |---|---:|---:|
 | `mixtta_ms224sp2cpr` | **0.93277** | 94.93 |
+| `mixtta_ms224sp2cp` | 0.93180 | 94.84 |
 | `mixtta_ms224sp3` | 0.92740 | — |
 | `mixtta_ms224sp2` | 0.92724 | 94.46 |
 | `mixtta_ms224p2` | 0.92366 | 94.08 |
@@ -60,7 +61,7 @@ An earlier best, `mixtta_ms224` (0.91585, SHA-256 `75b92de5…`), is not stable 
 | `rbn` | 0.70231 | 76.23 |
 | `rotta` | 0.65983 | 65.01 |
 
-Copies of the scored files are kept in [out/_submitted/](out/_submitted/) (except `mixtta_ms224`, `mixtta_ms224sp2` and `mixtta_ms224sp2cpr`, which reproduce exactly).
+Copies of the scored files are kept in [out/_submitted/](out/_submitted/) (except `mixtta_ms224`, `mixtta_ms224sp2`, `mixtta_ms224sp2cp` and `mixtta_ms224sp2cpr`, which reproduce exactly).
 
 - `mixtta_st2` (SHA-256 `2359887ab175d886…`) does not reproduce bit-for-bit. Reruns differ on 9–12 of the 12,288 predictions, so its reference copy is `out/_submitted/mixtta_st2_kaggle0.91.csv`.
 - `cotta` and `cotta_norst` take about 68 s on the test stream on an RTX 5090, so they may exceed the 90 s limit on a 3090.
@@ -98,7 +99,7 @@ On Kaggle the class prior alone is worth +0.78 pt (`mixtta_ms224p2` 0.92366 agai
 
 | Method | Change | Proxy, mean of 4 offsets (%), seeds 0 / 1 | Val, 7 orders (%), seeds 0 / 1 | Val, harness (%) | Test imbalance floor | Changed vs `sp2` | Test time on RTX 5090 (s) | SHA-256 (first 16) |
 |---|---|---:|---:|---:|---:|---:|---:|---|
-| `mixtta_ms224sp2cp` | In-batch split of the shift batch | 85.60 / 85.59 | 94.00 / 94.01 | 94.84 | 0.0377 | 2.4 % | 24.9 | `c5d8e6cdcb6432af` |
+| `mixtta_ms224sp2cp`: Kaggle 0.93180 | In-batch split of the shift batch | 85.60 / 85.59 | 94.00 / 94.01 | 94.84 | 0.0377 | 2.4 % | 24.9 | `c5d8e6cdcb6432af` |
 | `mixtta_ms224sp2cpr` (best): **Kaggle 0.93277** | Split + second pass on the first 2 batches of a domain | 86.19 / 86.09 | 94.00 / 94.14 | 94.93 | 0.0375 | 2.7 % | 26.2 | `fb587264ef394f01` |
 | `mixtta_ms224sp2` (Kaggle 0.92724) | — | 84.15 / 84.15 | 93.88 / 93.78 | 94.46 | 0.0420 | — | 24.6 | `30dc0a8be78faf3d` |
 
@@ -115,7 +116,7 @@ On Kaggle the class prior alone is worth +0.78 pt (`mixtta_ms224p2` 0.92366 agai
 - **Proxy offsets.** "Mean of 4 offsets" averages the proxy with the first 0, 16, 32 and 48 images of each stream dropped, so each boundary falls at four different positions in its batch.
 - **Stability.** Both are stable on test for seeds 0–3: imbalance floor 0.034–0.038 against 0.038–0.042 for `sp2`, tree frog +23 to +55, and at most 5.6 % per class in the late domains.
 - **Paired comparisons.** Both follow `sp2`'s random sequence, so a Kaggle score for either, against 0.92724, measures the change itself. `sp2cp` is identical to `sp2` up to batch 18.
-- **Kaggle.** `mixtta_ms224sp2cpr` scored 0.93277, +0.55 pt over `mixtta_ms224sp2` (expected +0.2–0.4; the offset proxy predicted +2.0, again about 4× too high). `mixtta_ms224sp2cp` is not scored, so the gain is not yet divided between the split and the second pass.
+- **Kaggle.** `mixtta_ms224sp2cpr` scored 0.93277, +0.55 pt over `mixtta_ms224sp2` (expected +0.2–0.4; the offset proxy predicted +2.0, again about 4× too high). `mixtta_ms224sp2cp` (split only) scored 0.93180, so the split gives +0.46 pt and the second pass +0.10. The second pass's share is about 6 images of the public half, at the edge of the paired noise.
 
 ### Variants of `mixtta_ms224sp2`
 
