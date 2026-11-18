@@ -84,6 +84,9 @@ METHODS = {
                                    refine_batches=2, stage_lr=(2, 2, 2, 1, 0.25)),
     "mixtta_ms224sp2cprl3": partial(MixTTAMS, shift_thr=10.0, alpha_min=0.1, prior_lambda=2.0, split_shift=True,
                                     refine_batches=2, stage_lr=(3, 3, 3, 1, 0.1)),
+    # + adaptive LAME temperature (step 3a): per batch, T such that the mean max-probability is 0.3
+    "mixtta_ms224sp2cprl3q3": partial(MixTTAMS, shift_thr=10.0, alpha_min=0.1, prior_lambda=2.0, split_shift=True,
+                                      refine_batches=2, stage_lr=(3, 3, 3, 1, 0.1), lame_q=0.3),
     # domain-shift reset only: rate 1 on the shift batch, 1/2 on the next, then the usual 0.4
     "mixtta_ms224r": partial(MixTTAMS, shift_thr=10.0, alpha_min=0.4),
     "mixtta_ms224rp2": partial(MixTTAMS, shift_thr=10.0, alpha_min=0.4, prior_lambda=2.0),

@@ -31,6 +31,10 @@ For each incoming batch x:
      `n_shift` random flip + shift copies (mixbn.MultiMixBN2d normalisation with alpha, w).
   2. Average the probabilities over views and scales, and the penultimate features over views and scales.
   3. LAME on the averaged probabilities with a kNN graph on the averaged features. Predict the argmax.
+  3a. Before LAME, the probabilities are softened with temperature lame_T (default 2). With lame_q = q, the
+     temperature is instead set per batch (T in [1, 3]) so that the batch's mean max-probability is q: a
+     confident batch is softened more and an uncertain one less, so the weight of LAME's neighbour term is
+     similar on every domain.
   3b. (prior_lambda > 0) Class-prior correction, before LAME: the stream is class-balanced overall, but the
      model over-predicts some classes under corruption (tree frog, container ship) and under-predicts
      others (tabby, sports car). Count the predicted labels so far, pi_c = (count_c + tau/C) / (n + tau), and
@@ -64,7 +68,7 @@ class MixTTAMS:
                  shift_thr=0.0, alpha_min=None, extra_train=(), extra_lr=1e-4, temporal_mu=0.0, temporal_eps=0.1,
                  split_shift=False, split_min=4, split_train="new", refine_batches=0,
                  st_weight=None, st_pow=1.0, st_ent=None, ema_pred=0.0, refine_steps=None,
-                 opt_reset=False, stage_lr=None):
+                 opt_reset=False, stage_lr=None, lame_q=None):
         setup_cuda()
         if deterministic:  # fixed cuDNN algorithms: reruns give the same predictions (slower)
             torch.backends.cudnn.benchmark = False
@@ -74,6 +78,7 @@ class MixTTAMS:
         self.model = self.model.to(memory_format=torch.channels_last)
         self.layers = [m for m in self.model.modules() if isinstance(m, MultiMixBN2d)]
         self.flip, self.n_shift, self.knn, self.lame_T = flip, n_shift, knn, lame_T
+        self.lame_q = lame_q  # adaptive temperature: per batch, T in [1, 3] such that the mean max-prob is lame_q
         self.steps, self.train_scale = steps, train_scale
         self.prior_lambda, self.prior_tau = prior_lambda, prior_tau
         self.counts, self.n_seen = None, 0
@@ -280,6 +285,20 @@ class MixTTAMS:
         V = logits.size(0) // B
         return logits.float().softmax(1).view(V, B, -1).mean(0), self._feats.float().view(V, B, -1).mean(0)
 
+    @staticmethod
+    def _temper_to(prob, q):
+        """Step 3a with lame_q: soften with the temperature T in [1, 3] (bisection) that brings the batch's mean
+        max-probability to q; T = 1 if it is already below q, T = 3 if q is not reached at T = 3."""
+        logp = torch.log(prob + 1e-10)
+        lo, hi = 1.0, 3.0
+        for _ in range(20):
+            T = 0.5 * (lo + hi)
+            if torch.softmax(logp / T, 1).max(1).values.mean() > q:
+                lo = T
+            else:
+                hi = T
+        return torch.softmax(logp / (0.5 * (lo + hi)), 1)
+
     def _predict(self, out):
         """Steps 2-3: fuse scales, class prior, temperature, LAME. Returns the LAME output z."""
         prob = torch.stack([p for p, _ in out]).mean(0)
@@ -291,7 +310,9 @@ class MixTTAMS:
             pi = (self.counts + self.prior_tau / C) / (self.n_seen + self.prior_tau)
             prob = prob * (C * pi).pow(-self.prior_lambda)
             prob = prob / prob.sum(1, keepdim=True)
-        if self.lame_T != 1.0:
+        if self.lame_q is not None:
+            prob = self._temper_to(prob, self.lame_q)
+        elif self.lame_T != 1.0:
             prob = torch.softmax(torch.log(prob + 1e-10) / self.lame_T, 1)
         if self.temporal_mu and self.h_prev is not None:  # 3c: classes of the previous batch are likely again
             prob = prob * (self.h_prev + self.temporal_eps).pow(self.temporal_mu)
