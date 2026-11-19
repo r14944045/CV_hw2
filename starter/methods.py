@@ -90,6 +90,10 @@ METHODS = {
     # floor of the val-only re-pick (tools/dev/repick.py): stage-1 pick so far (2 steps, LAME T 1), every later
     # stage at its simplest option (no shift reset, split, second pass, class prior, per-stage lr or adaptive T)
     "mixtta_repick_floor": partial(MixTTAMS, sizes=(160, 224), steps=2, lame_T=1.0),
+    # val-only re-pick after stage 5 (stages 6-7, per-stage lr and adaptive T, at their simplest): 3 steps, LAME T 2,
+    # shift reset with rate floor 0.2, val-rule threshold 9.0, in-batch split; no second pass, no class prior
+    "mixtta_repick_s5": partial(MixTTAMS, sizes=(160, 224), steps=3, lame_T=2.0, alpha_min=0.2, shift_thr=9.0,
+                                split_shift=True),
     # + adaptive LAME temperature (step 3a): per batch, T such that the mean max-probability is 0.3
     "mixtta_ms224sp2cprl3q3": partial(MixTTAMS, shift_thr=10.0, alpha_min=0.1, prior_lambda=2.0, split_shift=True,
                                       refine_batches=2, stage_lr=(3, 3, 3, 1, 0.1), lame_q=0.3),
