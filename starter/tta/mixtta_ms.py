@@ -69,7 +69,7 @@ class MixTTAMS:
                  shift_thr=0.0, alpha_min=None, extra_train=(), extra_lr=1e-4, temporal_mu=0.0, temporal_eps=0.1,
                  split_shift=False, split_min=4, split_train="new", refine_batches=0,
                  st_weight=None, st_pow=1.0, st_ent=None, ema_pred=0.0, refine_steps=None,
-                 opt_reset=False, stage_lr=None, lame_q=None):
+                 opt_reset=False, stage_lr=None, lame_q=None, local_context=False):
         setup_cuda()
         if deterministic:  # fixed cuDNN algorithms: reruns give the same predictions (slower)
             torch.backends.cudnn.benchmark = False
@@ -92,6 +92,8 @@ class MixTTAMS:
         self.refine_steps = refine_steps  # self-training steps on the second-pass batches (None: steps)
         self.opt_reset = opt_reset  # clear Adam's moment estimates at a detected domain shift
         self.temporal_mu, self.temporal_eps, self.h_prev = temporal_mu, temporal_eps, None
+        self.local_context = local_context
+        self.previous_graph_probs = None
         self.amp = torch.autocast("cuda", dtype=torch.bfloat16, enabled=amp)
         self._feats = None
         self.model.fc.register_forward_hook(lambda m, inp, out: setattr(self, "_feats", inp[0].detach()))
@@ -261,8 +263,8 @@ class MixTTAMS:
             out = [self._scale_forward_split(self._resize(x, s), k, self.j_old) for k, s in enumerate(self.sizes)]
         else:
             out = [self._scale_forward(self._resize(x, s), k, alpha) for k, s in enumerate(self.sizes)]
-        z = self._predict(out)
         refine = self.refine_batches and not self.j_old and self.k_dom <= self.refine_batches and self.opt is not None
+        z = self._predict(out, remember=not refine)
         if refine:  # 5: first batches of a domain: train on this batch, then predict it again with the new gamma/beta
             self._use_ema(False)
             self.self_train(x, z, steps=self.refine_steps)
@@ -300,8 +302,8 @@ class MixTTAMS:
                 hi = T
         return torch.softmax(logp / (0.5 * (lo + hi)), 1)
 
-    def _predict(self, out):
-        """Steps 2-3: fuse scales, class prior, temperature, LAME. Returns the LAME output z."""
+    def _predict(self, out, *, remember=True):
+        """Fuse scales and compute soft targets for prediction and self-training."""
         prob = torch.stack([p for p, _ in out]).mean(0)
         feats = torch.stack([f for _, f in out]).mean(0)
         C = prob.size(1)
@@ -311,6 +313,7 @@ class MixTTAMS:
             pi = (self.counts + self.prior_tau / C) / (self.n_seen + self.prior_tau)
             prob = prob * (C * pi).pow(-self.prior_lambda)
             prob = prob / prob.sum(1, keepdim=True)
+        image_prob = prob
         if self.lame_q is not None:
             prob = self._temper_to(prob, self.lame_q)
         elif self.lame_T != 1.0:
@@ -320,7 +323,24 @@ class MixTTAMS:
             prob = prob / prob.sum(1, keepdim=True)
         z = lame(prob, feats, self.knn)
         self.h_prev = z.mean(0)
+        if self.local_context:
+            target = self._local_targets(image_prob, z)
+            if remember:
+                self.previous_graph_probs = z.detach()
+            return target
         return z
+
+    def _local_targets(self, image_prob, graph_prob):
+        """Estimate each image's class prior from other rows in this batch and the preceding batch."""
+        history = self.previous_graph_probs
+        evidence = graph_prob if history is None else torch.cat([history, graph_prob])
+        positions = torch.arange(len(evidence), device=evidence.device)
+        distance = (positions[-len(graph_prob):, None] - positions[None, :]).abs()
+        weights = torch.exp(-distance / 12.0).masked_fill_(distance == 0, 0)
+        counts = weights @ evidence + 0.2  # pseudocount per class, including when no neighbours exist
+        # The prior's row-wise normalizer cancels in softmax. Sharpen the combined target for self-training.
+        logits = (2 * image_prob.clamp_min(1e-12).log() + graph_prob.clamp_min(1e-12).log()) / 3
+        return (2 * (logits + 0.5 * counts.log())).softmax(1)
 
     def _st_weights(self, t):
         """Per-image weights of the self-training loss (None: uniform). st_weight="conf": (max_c t)^st_pow.
