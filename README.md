@@ -1,6 +1,6 @@
 # CVPDL HW2: test-time adaptation
 
-Assignment spec: [HW2.md](HW2.md). Experiments and method write-ups: [report.md](report.md).
+The [assignment slides](CVPDL%202026%20hw2%20slides.pptx.pdf) cover grading and submission on slides 15–17 and the adaptation rules on slides 19–21. The [starter instructions](HW2.md) describe the stream format. Results are in [report.md](report.md).
 
 ## Setup
 
@@ -13,35 +13,39 @@ pip install -r requirements.txt --extra-index-url https://download.pytorch.org/w
 
 Unzip the dataset into `data/` (from `ntu-cvpdl-2026-hw-2.zip`) and put `source_resnet50_160.pth` in the repo root.
 
-## Data use
+### Generate the submitted file (`mixtta_repick`, Kaggle public 0.92675)
 
-- Only the official harness ([starter/harness.py](starter/harness.py), unmodified) reads the test stream, in one online pass per submission (`starter/run.py --split test`).
-- Settings are chosen on val ([tools/dev/](tools/dev/), val only) and with Kaggle public scores.
+Every setting of `mixtta_repick` was chosen on val alone by [tools/dev/repick.py](tools/dev/repick.py); see [report.md](report.md#val-only-re-pick-all-evaluations).
 
-## Best submission
+```bash
+METHOD=mixtta_repick
+cd starter
+python run.py --method $METHOD --split test --data ../data --ckpt ../source_resnet50_160.pth --out ../out/$METHOD
+cd ..
+python tools/check_submission.py out/$METHOD     # format, run-log hash, time and VRAM checks
+sha256sum out/$METHOD/test_pred.csv              # a6ab4f7074a81a692cef0af7dcc94e5dcaa63cb9b01a1f7d90c747b6e6b58e23 on an RTX 5090
+```
 
-| | |
-|---|---|
-| Method | `mixtta_ms224sp2cprl3` (details below). Reproduce it with `mixtta_ms224sp2cprl3v`, which gives a byte-identical test file |
-| Kaggle public | **0.93831** |
-| Val accuracy | 95.60 % (harness) |
-| Test-stream time | 27.3 s on an RTX 5090. The limit is 90 s on a 3090, where it has not been measured. Peak VRAM 4.6 GB |
-| Submitted file | `out/mixtta_ms224sp2cprl3v/test_pred.csv`, SHA-256 `4b5217d9336d2c875e5bff54be22fe9dbab42c54ec6c02f984e6d576ff793d8c` (torch 2.13.0+cu129, seed 0, RTX 5090) |
-| Code | [starter/tta/mixtta_ms.py](starter/tta/mixtta_ms.py), registered in [starter/methods.py](starter/methods.py) |
+On a quiet RTX 5090 the test stream takes 25.1 s, with 4.1 GB peak VRAM. The limit is 90 s on an RTX 3090, which has not been measured.
 
-The method is MixTTA-MS: self-training MixTTA at input sizes 160 and 224, with separate BN statistics per size.
-- **Predictions:** flip and 2-shift averaging, then LAME on T = 2-softened probabilities. bf16, deterministic cuDNN.
-- **Self-training:** 3 Adam steps per batch on BN γ/β at 160, with per-stage learning rates of 3× the base 1e-3 for the stem, layer1 and layer2, 1× for layer3 and 0.1× for layer4.
-- **Domain-shift reset:** online detection resets the tracked BN statistics. The threshold, 8.7, is chosen on val only by [tools/dev/threshold_val.py](tools/dev/threshold_val.py). The reset starts from the images after a changepoint found inside the batch.
-- **Within a domain:** running-mean statistics.
-- **Global class prior:** a correction with λ = 2.
-- **Second pass:** on the first 2 batches of each domain, the model self-trains first, then predicts the batch again.
+| Val-only submission | Re-pick stages | Val (%) | Kaggle public |
+|---|---|---:|---:|
+| `mixtta_repick` (submitted) | all 7 | 95.08 | **0.92675** |
+| `mixtta_repick_s5` | 1–5 (no per-stage learning rates) | 94.74 | 0.92220 |
+| `mixtta_ms224` | 1 | 93.99 | 0.91585 |
+| `mixtta_repick_floor` | interim: 2 steps, T = 1 | 94.03 | 0.91227 |
 
-`mixtta_ms224sp2cprl3` uses a hand-set threshold of 10, and `mixtta_ms224sp2cprl3v` the val-chosen 8.7. Otherwise they are the same method, and they give identical predictions on val and on test (same SHA-256).
+### Reproduce the validation result
 
-### Generate the submission file
+`mixtta_local_fixed` adds a local class prior to the fixed-tracking `mixtta_ms224` baseline. It scores **95.12%** on official validation, up from **93.99%**. Run from the repository root with only `data/val/` and the source checkpoint.
 
-Run from the repo root on a CUDA machine. It needs `data/` (unzipped from `ntu-cvpdl-2026-hw-2.zip`) and `source_resnet50_160.pth`.
+```bash
+python starter/run.py --method mixtta_local_fixed --split val --data data --ckpt source_resnet50_160.pth --out out/mixtta_local_fixed
+```
+
+The predictions and run log are in [out/mixtta_local_fixed](out/mixtta_local_fixed). The earlier `mixtta_local` experiment reached **96.07%** with the stage-5 shift detector. Its design history matters under the slide 21 FAQ. [Experiment details and provenance](report.md#local-class-prior-validation-experiment)
+
+### Generate the submission file for the earlier preset
 
 ```bash
 METHOD=mixtta_ms224sp2cprl3v
@@ -55,63 +59,3 @@ sha256sum out/$METHOD/test_pred.csv
 The file to upload is `out/$METHOD/test_pred.csv`. The method uses deterministic cuDNN algorithms, so a rerun on the same GPU and software gives the same file.
 
 `bash tools/run_gpu.sh $METHOD` runs val (prints accuracy) and test, then runs the checker.
-
-## Val-only re-pick of the settings
-
-[tools/dev/repick.py](tools/dev/repick.py) re-chooses every MixTTA-MS setting from val alone. Its protocol is written in its docstring and was fixed before any run.
-- **Score:** each candidate runs on the 7 val stream orders × 4 positions of the domain boundaries within the batch × 2 seeds.
-- **Collapse veto:** the 7 orders back to back. It vetoes candidates that collapse but never ranks them.
-- **Choice:** in each of 7 stages, the simplest candidate within 0.3 pt of the best (stages: self-training steps and LAME temperature, statistics tracking, in-batch split, second pass, class prior, per-stage learning rates, adaptive temperature).
-- **Shift threshold:** each tracking setting gets its own, from the val rule in [tools/dev/threshold_val.py](tools/dev/threshold_val.py).
-
-It reads no test data.
-
-```bash
-cd tools/dev
-python cache.py      # decode the val images once into cache/val.pt (val only)
-python repick.py     # resumable: results in repick_results.jsonl, decisions in repick_log.txt
-```
-
-The final setting is written to `tools/dev/repick_final.json`. The run takes about 41 candidate evaluations of roughly 5 minutes each on an idle RTX 5090 with one worker (`WORKERS` in the script, about 4.7 GB of VRAM each). To produce a submission, register that setting in `starter/methods.py` and run the harness commands above with its name.
-
-## Submission history (Kaggle public)
-
-| Method | Kaggle public | Val (%) |
-|---|---:|---:|
-| `mixtta_ms224sp2cprl3` (reproduced by `mixtta_ms224sp2cprl3v`) | **0.93831** | 95.60 |
-| `mixtta_ms224sp2cpr` | 0.93277 | 94.93 |
-| `mixtta_ms224sp2cp` | 0.93180 | 94.84 |
-| `mixtta_ms224sp3` | 0.92740 | — |
-| `mixtta_ms224sp2` | 0.92724 | 94.46 |
-| `mixtta_ms224p2` | 0.92366 | 94.08 |
-| `mixtta_ms224` | 0.91585 | 93.99 |
-| `mixtta_st2` | 0.91 | 91.90 |
-| `mixtta_st_notrain` | 0.88981 | 90.10 |
-| `mixtta` | 0.86246 | 89.06 |
-| `cotta` | 0.79117 | 76.99 |
-| `cotta_norst` | 0.79085 | 77.60 |
-| `bosa_stable_nomem` | 0.78662 | 79.50 |
-| `bn` | 0.72037 | 72.16 |
-| `rbn` | 0.70231 | 76.23 |
-| `rotta` | 0.65983 | 65.01 |
-
-Every scored file is a harness output: its SHA-256 matches the `pred_sha256` in its `test_run_log.json`. Copies are kept in [out/_submitted/](out/_submitted/) or reproduce exactly from the commands above.
-
-- `mixtta_st2` does not reproduce bit-for-bit (non-deterministic cuDNN). Its reference copy is `out/_submitted/mixtta_st2_kaggle0.91.csv`.
-- `cotta` and `cotta_norst` take about 68 s on the test stream on an RTX 5090, so they may exceed the 90 s limit on a 3090.
-
-## What each step is worth on Kaggle
-
-Each step is measured by comparing two scored submissions that differ only in that step.
-
-| Step | Submissions compared | Kaggle gain (pt) |
-|---|---|---:|
-| Class prior | `mixtta_ms224` → `mixtta_ms224p2` | +0.78 |
-| Shift reset and running-mean statistics | `mixtta_ms224p2` → `mixtta_ms224sp2` | +0.36 (within seed noise) |
-| In-batch split of the shift batch | `mixtta_ms224sp2` → `mixtta_ms224sp2cp` | +0.46 |
-| Second pass | `mixtta_ms224sp2cp` → `mixtta_ms224sp2cpr` | +0.10 (edge of noise) |
-| Per-stage learning rates | `mixtta_ms224sp2cpr` → `mixtta_ms224sp2cprl3` | +0.55 (val 94.93 → 95.60 %) |
-| Class-prior strength λ = 3 instead of 2 | `mixtta_ms224sp2` → `mixtta_ms224sp3` | +0.016, so the two are equivalent |
-| Second input size, 224 | `mixtta_st2` → `mixtta_ms224` | +0.6 (val +2.3) |
-
-Other registered variants, generated but not submitted: `mixtta_ms224sp2cprl`, `mixtta_ms224sp2cprl3q3`, `mixtta_ms224rp2`, `mixtta_ms224sp2f`, `mixtta_ms224sp2t`, `mixtta_ms3sp2`, `mixtta_ms224p`, `mixtta_ms3`, `mixtta_ms3s3`, `mixtta_ms224_t1`, `mixtta_st`. Generate any of them by setting `METHOD=<name>`.

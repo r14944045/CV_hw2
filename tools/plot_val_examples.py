@@ -1,9 +1,9 @@
 """Report Q4: 8 validation images with predicted and ground-truth labels (4 correct, 4 misclassified).
 
-Uses a harness val run (out/val_exp/<method>/val_pred.csv). Images are picked at random (fixed seed), round-robin
+Uses a harness val run (out/val_exp/<method>/val_pred.csv, else out/<method>/val_pred.csv). Images are picked at random (fixed seed), round-robin
 over the 3 val domains, so each domain appears in both rows.
 
-  python tools/plot_val_examples.py [--method mixtta_ms224sp2cprl3] [--out figures/val_examples.png]
+  python tools/plot_val_examples.py [--method mixtta_repick] [--out figures/val_examples.png]
 """
 import argparse
 import os
@@ -32,14 +32,17 @@ def pick(pos, dom, n, rng):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--method", default="mixtta_ms224sp2cprl3")
+    ap.add_argument("--method", default="mixtta_repick")
     ap.add_argument("--out", default=os.path.join(ROOT, "figures", "val_examples.png"))
     ap.add_argument("--seed", type=int, default=0)
     a = ap.parse_args()
 
     stream = pd.read_csv(os.path.join(ROOT, "data/val/stream.csv"))
     labels = pd.read_csv(os.path.join(ROOT, "data/val/labels.csv")).set_index("id")["label"]
-    pred = pd.read_csv(os.path.join(ROOT, "out/val_exp", a.method, "val_pred.csv")).set_index("id")["label"]
+    pred_path = os.path.join(ROOT, "out/val_exp", a.method, "val_pred.csv")
+    if not os.path.exists(pred_path):  # harness val runs of submitted methods live in out/<method>/
+        pred_path = os.path.join(ROOT, "out", a.method, "val_pred.csv")
+    pred = pd.read_csv(pred_path).set_index("id")["label"]
     names = [line.split()[2].replace("_", " ") for line in open(os.path.join(ROOT, "starter/classes.txt"))]
     ids = stream["id"].to_numpy()
     y, p = labels.loc[ids].to_numpy(), pred.loc[ids].to_numpy()

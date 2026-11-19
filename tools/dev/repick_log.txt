@@ -1,0 +1,92 @@
+== S1 self-training (steps, LAME T)
+   {"steps": 2, "lame_T": 1.0}                                            V 92.70 (s0 92.62 / s1 92.79) | L first 94.3 last 97.4 maxshare 0.055
+   {"steps": 2, "lame_T": 2.0}                                            V 92.94 (s0 92.83 / s1 93.05) | L first 94.1 last 96.7 maxshare 0.055
+   {"steps": 2, "lame_T": 3.0}                                            V 92.23 (s0 92.20 / s1 92.27) | L first 92.8 last 93.4 maxshare 0.058
+   {"steps": 3, "lame_T": 1.0}                                            V 92.81 (s0 92.85 / s1 92.77) | L first 94.1 last 97.5 maxshare 0.054
+   {"steps": 3, "lame_T": 2.0}                                            V 93.12 (s0 93.17 / s1 93.08) | L first 93.8 last 97.0 maxshare 0.054
+   {"steps": 3, "lame_T": 3.0}                                            V 92.39 (s0 92.45 / s1 92.34) | L first 92.1 last 92.3 maxshare 0.058
+   {"steps": 4, "lame_T": 1.0}                                            V 92.83 (s0 92.77 / s1 92.89) | L first 94.2 last 97.7 maxshare 0.052
+   {"steps": 4, "lame_T": 2.0}                                            V 93.33 (s0 93.22 / s1 93.45) | L first 94.3 last 97.0 maxshare 0.053
+   {"steps": 4, "lame_T": 3.0}                                            V 92.56 (s0 92.50 / s1 92.62) | L first 92.4 last 90.3 maxshare 0.060
+   margin m = 0.30
+   -> pick {"steps": 3, "lame_T": 2.0} (V 93.12; best 93.33; tied within m: 2)
+== S2 tracking
+   {}                                                                     V 93.12 (s0 93.17 / s1 93.08) | L first 93.8 last 97.0 maxshare 0.054
+   {"alpha_min": 0.4}                                                     V 93.02 (s0 93.11 / s1 92.93) | L first 94.3 last 97.0 maxshare 0.052 thr 6.8
+   {"alpha_min": 0.2}                                                     V 93.52 (s0 93.54 / s1 93.49) | L first 94.4 last 96.8 maxshare 0.052 thr 4.8
+   {"alpha_min": 0.1}                                                     V 93.57 (s0 93.59 / s1 93.54) | L first 94.7 last 96.7 maxshare 0.053 thr 5
+   {"alpha_min": 0.05}                                                    V 93.54 (s0 93.55 / s1 93.52) | L first 94.7 last 96.7 maxshare 0.053 thr 5
+   -> pick {"alpha_min": 0.2} (V 93.52; best 93.57; tied within m: 3)
+== S3 in-batch split
+   {}                                                                     V 93.52 (s0 93.54 / s1 93.49) | L first 94.4 last 96.8 maxshare 0.052 thr 4.8
+   {"split_shift": true}                                                  V 93.91 (s0 93.95 / s1 93.87) | L first 94.6 last 97.4 maxshare 0.051 thr 9
+   -> pick {"split_shift": true} (V 93.91; best 93.91; tied within m: 1)
+== S4 second pass
+   {}                                                                     V 93.91 (s0 93.95 / s1 93.87) | L first 94.6 last 97.4 maxshare 0.051 thr 9
+   {"refine_batches": 1}                                                  V 93.98 (s0 94.01 / s1 93.95) | L first 94.7 last 97.3 maxshare 0.051 thr 9
+   {"refine_batches": 2}                                                  V 94.05 (s0 94.07 / s1 94.02) | L first 94.7 last 97.4 maxshare 0.052 thr 9
+   {"refine_batches": 3}                                                  V 94.09 (s0 94.09 / s1 94.09) | L first 94.9 last 97.4 maxshare 0.052 thr 9
+   -> pick {} (V 93.91; best 94.09; tied within m: 4)
+== S5 class prior
+   {}                                                                     V 93.91 (s0 93.95 / s1 93.87) | L first 94.6 last 97.4 maxshare 0.051 thr 9
+   {"prior_lambda": 1.0}                                                  V 93.96 (s0 93.98 / s1 93.93) | L first 94.6 last 97.4 maxshare 0.052 thr 9
+   {"prior_lambda": 2.0}                                                  V 93.92 (s0 93.96 / s1 93.87) | L first 94.6 last 97.4 maxshare 0.051 thr 9
+   {"prior_lambda": 3.0}                                                  V 93.80 (s0 93.84 / s1 93.75) | L first 94.7 last 97.3 maxshare 0.051 thr 9
+   -> pick {} (V 93.91; best 93.96; tied within m: 4)
+== S1 self-training (steps, LAME T)
+   {"steps": 2, "lame_T": 1.0}                                            V 92.70 (s0 92.62 / s1 92.79) | L first 94.3 last 97.4 maxshare 0.055
+   {"steps": 2, "lame_T": 2.0}                                            V 92.94 (s0 92.83 / s1 93.05) | L first 94.1 last 96.7 maxshare 0.055
+   {"steps": 2, "lame_T": 3.0}                                            V 92.23 (s0 92.20 / s1 92.27) | L first 92.8 last 93.4 maxshare 0.058
+   {"steps": 3, "lame_T": 1.0}                                            V 92.81 (s0 92.85 / s1 92.77) | L first 94.1 last 97.5 maxshare 0.054
+   {"steps": 3, "lame_T": 2.0}                                            V 93.12 (s0 93.17 / s1 93.08) | L first 93.8 last 97.0 maxshare 0.054
+   {"steps": 3, "lame_T": 3.0}                                            V 92.39 (s0 92.45 / s1 92.34) | L first 92.1 last 92.3 maxshare 0.058
+   {"steps": 4, "lame_T": 1.0}                                            V 92.83 (s0 92.77 / s1 92.89) | L first 94.2 last 97.7 maxshare 0.052
+   {"steps": 4, "lame_T": 2.0}                                            V 93.33 (s0 93.22 / s1 93.45) | L first 94.3 last 97.0 maxshare 0.053
+   {"steps": 4, "lame_T": 3.0}                                            V 92.56 (s0 92.50 / s1 92.62) | L first 92.4 last 90.3 maxshare 0.060
+   margin m = 0.30
+   -> pick {"steps": 3, "lame_T": 2.0} (V 93.12; best 93.33; tied within m: 2)
+== S2 tracking
+   {}                                                                     V 93.12 (s0 93.17 / s1 93.08) | L first 93.8 last 97.0 maxshare 0.054
+   {"alpha_min": 0.4}                                                     V 93.02 (s0 93.11 / s1 92.93) | L first 94.3 last 97.0 maxshare 0.052 thr 6.8
+   {"alpha_min": 0.2}                                                     V 93.52 (s0 93.54 / s1 93.49) | L first 94.4 last 96.8 maxshare 0.052 thr 4.8
+   {"alpha_min": 0.1}                                                     V 93.57 (s0 93.59 / s1 93.54) | L first 94.7 last 96.7 maxshare 0.053 thr 5
+   {"alpha_min": 0.05}                                                    V 93.54 (s0 93.55 / s1 93.52) | L first 94.7 last 96.7 maxshare 0.053 thr 5
+   -> pick {"alpha_min": 0.2} (V 93.52; best 93.57; tied within m: 3)
+== S3 in-batch split
+   {}                                                                     V 93.52 (s0 93.54 / s1 93.49) | L first 94.4 last 96.8 maxshare 0.052 thr 4.8
+   {"split_shift": true}                                                  V 93.91 (s0 93.95 / s1 93.87) | L first 94.6 last 97.4 maxshare 0.051 thr 9
+   -> pick {"split_shift": true} (V 93.91; best 93.91; tied within m: 1)
+== S4 second pass
+   {}                                                                     V 93.91 (s0 93.95 / s1 93.87) | L first 94.6 last 97.4 maxshare 0.051 thr 9
+   {"refine_batches": 1}                                                  V 93.98 (s0 94.01 / s1 93.95) | L first 94.7 last 97.3 maxshare 0.051 thr 9
+   {"refine_batches": 2}                                                  V 94.05 (s0 94.07 / s1 94.02) | L first 94.7 last 97.4 maxshare 0.052 thr 9
+   {"refine_batches": 3}                                                  V 94.09 (s0 94.09 / s1 94.09) | L first 94.9 last 97.4 maxshare 0.052 thr 9
+   -> pick {} (V 93.91; best 94.09; tied within m: 4)
+== S5 class prior
+   {}                                                                     V 93.91 (s0 93.95 / s1 93.87) | L first 94.6 last 97.4 maxshare 0.051 thr 9
+   {"prior_lambda": 1.0}                                                  V 93.96 (s0 93.98 / s1 93.93) | L first 94.6 last 97.4 maxshare 0.052 thr 9
+   {"prior_lambda": 2.0}                                                  V 93.92 (s0 93.96 / s1 93.87) | L first 94.6 last 97.4 maxshare 0.051 thr 9
+   {"prior_lambda": 3.0}                                                  V 93.80 (s0 93.84 / s1 93.75) | L first 94.7 last 97.3 maxshare 0.051 thr 9
+   -> pick {} (V 93.91; best 93.96; tied within m: 4)
+== S6 per-stage learning rates
+   {}                                                                     V 93.91 (s0 93.95 / s1 93.87) | L first 94.6 last 97.4 maxshare 0.051 thr 9
+   {"stage_lr": [2, 2, 2, 1, 0.25]}                                       V 94.16 (s0 94.23 / s1 94.10) | L first 95.1 last 97.4 maxshare 0.052 thr 9
+   {"stage_lr": [2, 2, 2, 1, 0.1]}                                        V 94.19 (s0 94.29 / s1 94.09) | L first 95.1 last 97.6 maxshare 0.053 thr 9
+   {"stage_lr": [2, 2, 2, 2, 0.25]}                                       V 94.32 (s0 94.42 / s1 94.22) | L first 95.8 last 97.9 maxshare 0.052 thr 9
+   {"stage_lr": [2, 2, 2, 2, 0.1]}                                        V 94.29 (s0 94.39 / s1 94.19) | L first 95.7 last 97.8 maxshare 0.053 thr 9
+   {"stage_lr": [3, 3, 3, 1, 0.25]}                                       V 94.31 (s0 94.40 / s1 94.22) | L first 95.6 last 97.7 maxshare 0.052 thr 9
+   {"stage_lr": [3, 3, 3, 1, 0.1]}                                        V 94.30 (s0 94.35 / s1 94.25) | L first 95.1 last 97.6 maxshare 0.052 thr 9
+   {"stage_lr": [3, 3, 3, 2, 0.25]}                                       V 94.36 (s0 94.45 / s1 94.28) | L first 95.9 last 98.1 maxshare 0.052 thr 9
+   {"stage_lr": [3, 3, 3, 2, 0.1]}                                        V 94.33 (s0 94.46 / s1 94.20) | L first 95.6 last 98.0 maxshare 0.052 thr 9
+   {"stage_lr": [4, 4, 4, 1, 0.25]}                                       V 94.35 (s0 94.46 / s1 94.25) | L first 96.1 last 97.9 maxshare 0.052 thr 9
+   {"stage_lr": [4, 4, 4, 1, 0.1]}                                        V 94.41 (s0 94.48 / s1 94.34) | L first 95.8 last 97.8 maxshare 0.053 thr 9
+   {"stage_lr": [4, 4, 4, 2, 0.25]}                                       V 94.33 (s0 94.41 / s1 94.24) | L first 96.0 last 97.9 maxshare 0.053 thr 9
+   {"stage_lr": [4, 4, 4, 2, 0.1]}                                        V 94.37 (s0 94.47 / s1 94.28) | L first 96.0 last 98.1 maxshare 0.053 thr 9
+   -> pick {"stage_lr": [2, 2, 2, 1, 0.25]} (V 94.16; best 94.41; tied within m: 12)
+== S7 adaptive LAME temperature
+   {}                                                                     V 94.16 (s0 94.23 / s1 94.10) | L first 95.1 last 97.4 maxshare 0.052 thr 9
+   {"lame_q": 0.4}                                                        V 94.30 (s0 94.36 / s1 94.24) | L first 95.6 last 98.3 maxshare 0.052 thr 9
+   {"lame_q": 0.3}                                                        V 94.31 (s0 94.30 / s1 94.32) | L first 95.3 last 98.1 maxshare 0.052 thr 9
+   {"lame_q": 0.2}                                                        V 94.18 (s0 94.28 / s1 94.07) | L first 94.9 last 97.3 maxshare 0.053 thr 9
+   -> pick {} (V 94.16; best 94.31; tied within m: 4)
+FINAL {"alpha_min": 0.2, "lame_T": 2.0, "shift_thr": 9.0, "sizes": [160, 224], "split_shift": true, "stage_lr": [2, 2, 2, 1, 0.25], "steps": 3}
