@@ -8,6 +8,7 @@ below with functools.partial, so each ablation is just `--method <name>`.
 """
 from functools import partial
 
+from tta.mixtta_ms import LocalPriorReadout
 from tta import BOSA, CoTTA, MixTTA, MixTTAMS, NormOnly, RoTTA, Source
 
 _repick_s5 = partial(MixTTAMS, sizes=(160, 224), steps=3, lame_T=2.0, alpha_min=0.2,
@@ -68,6 +69,7 @@ METHODS = {
     "mixtta_local_fixed": partial(MixTTAMS, local_context=True),
     "mixtta_local_192_256": partial(MixTTAMS, sizes=(192, 256), local_context=True),
     "mixtta_local_smooth192": partial(MixTTAMS, sizes=(192, 256), smooth_sizes=(192,), local_context=True),
+    "mixtta_local_readout": LocalPriorReadout,
     "mixtta_ms3": partial(MixTTAMS, sizes=(160, 192, 224), steps=2),
     "mixtta_ms3s3": partial(MixTTAMS, sizes=(160, 192, 224)),
     # + class-prior correction from the counts of predicted labels so far (tta/mixtta_ms.py, step 3b)

@@ -1,0 +1,22 @@
+{
+  "method": "mixtta_local_readout",
+  "V": 95.03109364469043,
+  "V_seed": {
+    "0": 95.06952079335245,
+    "1": 94.99266649602836
+  },
+  "L_first": 96.02272727272727,
+  "L_last": 98.20075757575758,
+  "L_maxshare": 0.05303030303030303,
+  "veto": false,
+  "V_order": {
+    "orig": 95.48344559144478,
+    "rev": 94.83226183858895,
+    "p021": 94.89332838129828,
+    "p102": 95.22720394721188,
+    "p120": 95.46270406292403,
+    "p201": 94.31360379793442,
+    "p210": 95.00510789343062
+  },
+  "evaluation": "Replay of online validation batches through the registered output rule. Backbone, batch normalization and adaptation targets are shared with mixtta_local_smooth192."
+}

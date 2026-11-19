@@ -274,9 +274,10 @@ class MixTTAMS:
             self.self_train(x, z, steps=self.refine_steps)
             self._update_ema()
             self._use_ema(True)
-            z = self._predict([self._eval_views(k, x.size(0)) for k in range(len(self.sizes))])
+            out = [self._eval_views(k, x.size(0)) for k in range(len(self.sizes))]
+            z = self._predict(out)
         self._use_ema(False)
-        pred = z.argmax(1)
+        pred = self._output_labels(out, z)
         self.counts += torch.bincount(pred, minlength=z.size(1)).float()
         self.n_seen += pred.numel()
         if self.opt is not None and not refine:
@@ -334,14 +335,20 @@ class MixTTAMS:
             return target
         return z
 
-    def _local_targets(self, image_prob, graph_prob):
-        """Estimate each image's class prior from other rows in this batch and the preceding batch."""
-        history = self.previous_graph_probs
-        evidence = graph_prob if history is None else torch.cat([history, graph_prob])
+    @staticmethod
+    def _local_counts(current, history, decay):
+        """Distance-weighted class evidence around each current row, excluding the row itself."""
+        evidence = current if history is None else torch.cat([history, current])
         positions = torch.arange(len(evidence), device=evidence.device)
-        distance = (positions[-len(graph_prob):, None] - positions[None, :]).abs()
-        weights = torch.exp(-distance / 12.0).masked_fill_(distance == 0, 0)
-        counts = weights @ evidence + 0.2  # pseudocount per class, including when no neighbours exist
+        distance = (positions[-len(current):, None] - positions[None, :]).abs()
+        weights = torch.exp(-distance / decay).masked_fill_(distance == 0, 0)
+        return weights @ evidence + 0.2  # pseudocount per class, including when no neighbours exist
+
+    def _output_labels(self, out, target):
+        return target.argmax(1)
+
+    def _local_targets(self, image_prob, graph_prob):
+        counts = self._local_counts(graph_prob, self.previous_graph_probs, 12.0)
         # The prior's row-wise normalizer cancels in softmax. Sharpen the combined target for self-training.
         logits = (2 * image_prob.clamp_min(1e-12).log() + graph_prob.clamp_min(1e-12).log()) / 3
         return (2 * (logits + 0.5 * counts.log())).softmax(1)
@@ -374,3 +381,19 @@ class MixTTAMS:
             self.opt.zero_grad(set_to_none=True)
             loss.backward()
             self.opt.step()
+
+
+class LocalPriorReadout(MixTTAMS):
+    """Predict from nearby training targets while retaining the original targets for adaptation."""
+
+    def __init__(self, model):
+        super().__init__(model, sizes=(192, 256), smooth_sizes=(192,), local_context=True)
+        self.previous_targets = None
+
+    def _output_labels(self, out, target):
+        image_prob = torch.stack([prob for prob, _ in out]).mean(0)
+        graph_prob = self.previous_graph_probs  # _predict just stored the current batch
+        counts = self._local_counts(target, self.previous_targets, 8.0)
+        self.previous_targets = target.detach()
+        log_evidence = image_prob.clamp_min(1e-12).log().lerp(graph_prob.clamp_min(1e-12).log(), 0.25)
+        return (log_evidence + 0.5 * counts.log()).argmax(1)

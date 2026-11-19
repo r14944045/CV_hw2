@@ -78,6 +78,17 @@ Each control uses adaptation seed 0. The within-domain permutation uses NumPy se
 
 Across seven orders, four offsets and two seeds (56 validation runs), mean accuracy rose from **93.92% to 94.84%**. Each of the seven order averages improved. On the continuous 231-batch stream, the new preset scored 95.45% on the first 2,112 images and 98.30% on the last 2,112. The most frequent predicted class accounted for 5.26% of the final window, passing the collapse check. [Previous protocol](out/mixtta_local_fixed/val_protocol.json) · [New protocol](out/mixtta_local_smooth192/val_protocol.json)
 
+### Prediction from nearby self-training targets
+
+The smoothed model supplies an image probability $p_i$, a graph probability $z_i$ and a soft training target $t_i$. For prediction we estimated a second class prior from nearby **training targets**, with distance weights $\exp(-d/8)$ and 0.2 added to each class count. As in Q2, we excluded the query row and used the current and previous batches. We returned the class with the highest $0.75\log p_i + 0.25\log z_i + 0.5\log h_i$, where $h_i$ is the new count vector. The self-training loss still uses $t_i$.
+
+| Output rule | Official correct | 56-run mean | Shuffle | JPEG | Contrast/noise |
+|---|---:|---:|---:|---:|---:|
+| Smoothed model | 2,013 | 94.84% | 1,857 | 1,878 | 1,945 |
+| Nearby training targets | 2,023 | 95.03% | 1,860 | 1,884 | 1,948 |
+
+The official validation counts come from end-to-end runs. For the longer protocol we replayed the model’s chronological validation outputs through each prediction rule, starting with empty state for every run. We checked the replay against every official validation prediction. [Validation log](out/mixtta_local_readout/val_run_log.json) · [Stream-order results](out/mixtta_local_readout/val_protocol.json)
+
 ### Earlier stage-wise validation sweep
 
 A separate experiment scored each setting over 56 validation runs. It chose the simplest setting within 0.3 percentage points of the best after a 231-batch collapse check. The score in this table is the mean over orders, offsets and seeds. The CSV uses the fixed-tracking method described in Q2.
