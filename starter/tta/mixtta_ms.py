@@ -15,14 +15,14 @@ Same steps as MixTTA (mixtta.py), run at several input sizes, with three changes
 For each incoming batch x:
   0. (shift_thr > 0) Domain-shift detection: the KL divergence between the batch's conv1-output statistics and
      the first BN layer's tracked statistics, divided by its median over the last 8 batches of the current
-     domain. Above shift_thr (10), the batch starts a new domain: its statistics replace the tracked ones
-     (tracking rate 1) in every layer and at every size. The test domains change abruptly; with a fixed
+     domain. Above shift_thr, the batch starts a new domain (tools/dev/threshold_val.py chooses it on val: 8.7): its statistics replace the tracked ones
+     (tracking rate 1) in every layer and at every size. The val domains change abruptly; with a fixed
      rate of 0.4 the first batches of a new domain are normalised with a mix of the old domain's statistics.
   0b. (alpha_min set) Within a domain, the tracking rate is 1/k for the k-th batch since the last detected
      shift (a running mean of the domain's batch statistics, which are stationary within a domain but
      noisy from batch to batch because of the label skew), floored at alpha_min.
-  0c. (split_shift) Most domain boundaries fall inside a batch, and the detector usually fires on that mixed
-     batch. On a detected shift, one changepoint is fitted to the per-sample conv1 statistics of the previous
+  0c. (split_shift) A domain boundary usually falls inside a batch (both val boundaries do, at rows 8 and 28),
+     and the detector often fires on that mixed batch. On a detected shift, one changepoint is fitted to the per-sample conv1 statistics of the previous
      batch followed by this one (least squares on standardised channel means and log-variances). The first j
      rows (the old domain) are normalised with the previous domain's statistics, the new domain's statistics
      start from the remaining rows only, and the running mean of step 0b counts rows instead of batches.
@@ -35,14 +35,15 @@ For each incoming batch x:
      temperature is instead set per batch (T in [1, 3]) so that the batch's mean max-probability is q: a
      confident batch is softened more and an uncertain one less, so the weight of LAME's neighbour term is
      similar on every domain.
-  3b. (prior_lambda > 0) Class-prior correction, before LAME: the stream is class-balanced overall, but the
-     model over-predicts some classes under corruption (tree frog, container ship) and under-predicts
-     others (tabby, sports car). Count the predicted labels so far, pi_c = (count_c + tau/C) / (n + tau), and
+  3b. (prior_lambda > 0) Class-prior correction, before LAME: every val domain is class-balanced, and the
+     stream is assumed to be balanced overall, but under corruption the model over-predicts some classes
+     (on val, the source model: acoustic guitar, laptop, tree frog) and under-predicts others (steam
+     locomotive, sports car, timber wolf). Count the predicted labels so far, pi_c = (count_c + tau/C) / (n + tau), and
      multiply the probabilities by (C * pi_c)^(-prior_lambda). tau (in samples) delays the correction at
      the start of the stream, when the counts follow the label-skewed stream rather than the model's bias.
   4. Self-training: `steps` Adam steps on the BN scale/shift (gamma, beta), soft cross-entropy between
      the LAME output and the model's output on a random flip + shift copy of x at size
-     sizes[train_scale] (the native 160 by default; training at a larger size drifted on long streams).
+     sizes[train_scale] (the native 160 by default).
   4b. (stage_lr = 5 multipliers for stem, layer1 .. layer4) Per-stage learning rates for step 4. The early
      stages see low-level, corruption-specific statistics and can adapt faster; layer4's affine parameters
      act directly on class evidence, and a high rate there destabilises self-training (a global lr of 2e-3

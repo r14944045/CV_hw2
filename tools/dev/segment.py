@@ -1,6 +1,7 @@
 import os, torch, numpy as np, torchvision, sys
 HERE = os.path.dirname(os.path.abspath(__file__)); CACHE = os.environ.get('HW2_DEV_CACHE', os.path.join(HERE, 'cache'))
 split = sys.argv[1]; K = int(sys.argv[2])
+assert split == "val", "val only: the test stream is read only by the official harness"
 d = torch.load(os.path.join(CACHE, f"{split}.pt")); x = d["x"]
 ck = torch.load(os.path.join(HERE, "../../source_resnet50_160.pth"), map_location="cpu", weights_only=False)
 m = torchvision.models.resnet50(num_classes=20); m.load_state_dict(ck["state_dict"]); m = m.cuda().eval()

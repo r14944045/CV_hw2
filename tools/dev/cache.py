@@ -4,7 +4,7 @@ from concurrent.futures import ThreadPoolExecutor
 HERE = os.path.dirname(os.path.abspath(__file__))
 root = os.path.join(HERE, "../../data")
 out = os.environ.get("HW2_DEV_CACHE", os.path.join(HERE, "cache")); os.makedirs(out, exist_ok=True)
-for split in ["val", "test"]:
+for split in ["val"]:  # val only: the test stream is read only by the official harness
     ids = pd.read_csv(f"{root}/{split}/stream.csv")["id"].tolist()
     def load(i): return np.asarray(Image.open(f"{root}/{split}/images/{i}.png").convert("RGB"))
     with ThreadPoolExecutor(16) as ex: arr = np.stack(list(ex.map(load, ids)))

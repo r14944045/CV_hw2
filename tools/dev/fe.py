@@ -1,6 +1,7 @@
-"""Fast evaluation of TTA methods on cached streams (outside the harness, same batching).
+"""Fast evaluation of TTA methods on cached val streams (outside the harness, same batching of 64).
 
-  streams: val orders (orig, rev, 5 domain permutations), test (no labels), proxy streams.
+  streams: the 7 val orders (orig, rev, 5 domain permutations). Val only: the test stream is read only by the
+  official harness (starter/run.py).
   rec=True records per-batch LAME inputs/outputs (prob after temperature, feats, z) via a lame() wrapper.
 """
 import os
@@ -19,11 +20,11 @@ STD = torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1).to(DEVICE)
 _cache = {}
 
 
-def data(split):
+def data(split="val"):
+    assert split == "val", "val only"
     if split not in _cache:
         d = torch.load(SP + f"{split}.pt")
-        if split in ("val", "test"):
-            d["bounds"] = np.load(os.path.join(os.path.dirname(os.path.abspath(__file__)), f"{split}_bounds.npy"))
+        d["bounds"] = np.load(os.path.join(os.path.dirname(os.path.abspath(__file__)), f"{split}_bounds.npy"))
         _cache[split] = d
     return _cache[split]
 
@@ -99,33 +100,3 @@ def M(name, **kw):
     """Factory from a registered method name plus overrides (for partials)."""
     f = METHODS[name]
     return lambda model: f(model, **kw)
-
-
-def proxy(factory, mix=1.0, seed=0, verbose=True, streams=(0, 1, 2, 3), tag="", offset=0):
-    """Run the 4 proxy streams; returns overall acc and per-corruption acc (12)."""
-    d = data(f"proxy{mix}"); X, y, dom = d["x"], d["y"].numpy(), d["dom"].numpy(); L = d["stream_len"]
-    correct = np.zeros(len(y), bool); ran = np.zeros(len(y), bool); t0 = time.time()
-    for s in streams:
-        idx = np.arange(s * L + offset, (s + 1) * L)  # offset: drop the first images (moves the boundaries in the batch)
-        p = run(factory, f"proxy{mix}", idx, seed=seed)
-        correct[idx] = p == y[idx]; ran[idx] = True
-    global LAST_CORRECT
-    LAST_CORRECT = correct.copy()
-    per = np.array([correct[(dom == c) & ran].mean() if ((dom == c) & ran).any() else np.nan for c in range(12)])
-    out = dict(mean=100 * correct[ran].mean(), per=(100 * per).round(1), sec=time.time() - t0)
-    if verbose:
-        print(f"proxy{mix} {tag} mean {out['mean']:.2f} | " + " ".join(f"{v:.1f}" for v in out["per"]) + f"  [{out['sec']:.0f}s]", flush=True)
-    return out
-
-
-def longproxy(factory, mix=0.5, seed=0, tag="", verbose=True):
-    """All 4 proxy streams back to back: 12 domains in the test's domain order, 132 batches (images repeat 4x)."""
-    d = data(f"proxy{mix}"); y, dom = d["y"].numpy(), d["dom"].numpy(); t0 = time.time()
-    p = run(factory, f"proxy{mix}", np.arange(len(y)), seed=seed)
-    ok = p == y
-    per = np.array([ok[dom == c].mean() for c in range(12)])
-    cnt = np.bincount(p, minlength=20); late = p[dom >= 9]
-    out = dict(mean=100 * ok.mean(), per=(100 * per).round(1), maxshare_late=np.bincount(late, minlength=20).max() / len(late), sec=time.time() - t0)
-    if verbose:
-        print(f"long{mix} {tag} mean {out['mean']:.2f} | " + " ".join(f"{v:.1f}" for v in out["per"]) + f" | late max share {out['maxshare_late']:.3f} [{out['sec']:.0f}s]", flush=True)
-    return out

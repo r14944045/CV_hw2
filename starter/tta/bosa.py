@@ -22,8 +22,8 @@ Assumptions where the paper is silent (supplementary material not available):
     memory bank. Predictions come from the teacher in eval mode.
   - The augmented view is RoTTA's / CoTTA's strong augmentation; the target is the teacher's softmax.
 
-Warning: with the default reg=1.0 (Eqs. 6-7 as printed, unit step) the statistics lock into an
-oscillation on the HW2 test stream; see the caveat in align.py. `bosa_stable` (reg=0.5) avoids it.
+Warning: with the default reg=1.0 (Eqs. 6-7 as printed, unit step) the statistics can lock into an
+oscillation; see the caveat in align.py. `bosa_stable` (reg=0.5) avoids it.
 """
 import torch
 

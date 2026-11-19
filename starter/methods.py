@@ -37,7 +37,7 @@ METHODS = {
     "bosa_nosparse": partial(BOSA, q=0.0),             # w/o activation sparsification
     "bosa_ent": partial(BOSA, loss="entropy"),         # w/o self-training: entropy minimisation
     # deviation from the paper: halve the constraint step (2 * 0.5 * alpha_t <= 1). The literal step
-    # 2 * alpha_t > 1 for alpha_t > 0.5 reflects the stats through the source and locks alpha_t at 1 on test.
+    # 2 * alpha_t > 1 for alpha_t > 0.5 reflects the stats through the source and can lock alpha_t at 1.
     "bosa_stable": partial(BOSA, reg=0.5),
     "bosa_stable_nomem": partial(BOSA, reg=0.5, use_memory=False),
 
@@ -67,7 +67,7 @@ METHODS = {
     "mixtta_ms224p": partial(MixTTAMS, prior_lambda=1.0),
     "mixtta_ms224p2": partial(MixTTAMS, prior_lambda=2.0),
     # + domain-shift detection (tracker reset) and running-mean tracking within a domain (steps 0, 0b)
-    "mixtta_ms224s": partial(MixTTAMS, shift_thr=10.0, alpha_min=0.1),  # collapses on test (tree frog)
+    "mixtta_ms224s": partial(MixTTAMS, shift_thr=10.0, alpha_min=0.1),  # without the class prior
     "mixtta_ms224sp2": partial(MixTTAMS, shift_thr=10.0, alpha_min=0.1, prior_lambda=2.0),
     # mixtta_ms224sp2 (Kaggle 0.92724) variants: stronger / faster prior, a third input size, a temporal label prior
     "mixtta_ms224sp3": partial(MixTTAMS, shift_thr=10.0, alpha_min=0.1, prior_lambda=3.0),
@@ -84,6 +84,9 @@ METHODS = {
                                    refine_batches=2, stage_lr=(2, 2, 2, 1, 0.25)),
     "mixtta_ms224sp2cprl3": partial(MixTTAMS, shift_thr=10.0, alpha_min=0.1, prior_lambda=2.0, split_shift=True,
                                     refine_batches=2, stage_lr=(3, 3, 3, 1, 0.1)),
+    # mixtta_ms224sp2cprl3 with the shift threshold chosen on val only (tools/dev/threshold_val.py): 8.7
+    "mixtta_ms224sp2cprl3v": partial(MixTTAMS, shift_thr=8.7, alpha_min=0.1, prior_lambda=2.0, split_shift=True,
+                                     refine_batches=2, stage_lr=(3, 3, 3, 1, 0.1)),
     # + adaptive LAME temperature (step 3a): per batch, T such that the mean max-probability is 0.3
     "mixtta_ms224sp2cprl3q3": partial(MixTTAMS, shift_thr=10.0, alpha_min=0.1, prior_lambda=2.0, split_shift=True,
                                       refine_batches=2, stage_lr=(3, 3, 3, 1, 0.1), lame_q=0.3),

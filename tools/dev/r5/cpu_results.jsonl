@@ -1,3 +1,0 @@
-{"tag": "base", "kw": {}, "seed": 1, "device": "cpu", "proxy_off0": 88.02, "proxy_per": [93.9, 92.4, 90.8, 71.9, 89.6, 89.1, 92.5, 90.5, 93.8, 82.9, 84.7, 86.1], "heldout_long": 78.86, "minutes": 51.1}
-{"tag": "q30", "kw": {"lame_q": 0.3}, "seed": 1, "device": "cpu", "proxy_off0": 89.02, "proxy_per": [94.3, 92.7, 91.3, 76.3, 91.4, 90.8, 93.4, 89.8, 92.5, 84.3, 85.2, 87.6], "heldout_long": 80.09, "minutes": 53.4}
-{"tag": "q20", "kw": {"lame_q": 0.2}, "seed": 1, "device": "cpu", "proxy_off0": 88.9, "proxy_per": [94.2, 93.0, 90.4, 75.9, 90.6, 90.5, 92.4, 91.0, 92.5, 84.0, 85.2, 88.7], "heldout_long": 79.53, "minutes": 55.7}

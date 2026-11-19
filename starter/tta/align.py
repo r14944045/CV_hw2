@@ -14,9 +14,9 @@ memory bank (not of the biased incoming batch), with a rate that adapts to how f
 mu_hat, var_hat are the statistics of the layer input in the forward that performs the update (the memory
 bank); mu_s, sigma_s are the source model's running statistics.
 
-Caveat (found on the HW2 test stream): for alpha_t > 0.5 the literal step 2 * alpha_t exceeds 1 and
-overshoots past the source. At alpha_t = 1 it gives mu = 2 mu_s - mu_hat, a reflection. The
-reflected statistics are far from the next batch's, so alpha_t stays at 1 in every layer. `reg` scales
+Caveat: for alpha_t > 0.5 the literal step 2 * alpha_t exceeds 1 and overshoots past the source. At
+alpha_t = 1 it gives mu = 2 mu_s - mu_hat, a reflection. The reflected statistics can be far from the
+next batch's, which keeps alpha_t at 1. `reg` scales
 the step: reg = 0.5 gives 2 * reg * alpha_t = alpha_t <= 1, a convex pull towards the source that cannot
 overshoot. Normalisation (Eq. 8) uses the aligned
 statistics. During a gradient forward with q > 0, activations are cached for the most salient channels only
