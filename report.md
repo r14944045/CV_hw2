@@ -41,18 +41,18 @@
 
 ## Q2 Method
 
-The CSV on this branch comes from `mixtta_local_fixed`. It uses the supplied 20-class ResNet-50 and an online batch size of 64. The only state required for the local class prior is the previous batch’s 20-way class probabilities.
+The new CSV comes from `mixtta_local_smooth192`. It uses the supplied 20-class ResNet-50 and an online batch size of 64. The only state required for the local class prior is the previous batch’s 20-way class probabilities.
 
-1. **Track the image statistics.** Resize each batch to 160 and 224 pixels. Each size has its own batch-normalization (BN) statistics. Before prediction, update the tracked mean and variance with a fixed rate of 0.4. Mix the updated statistics equally with the source checkpoint’s statistics.
+1. **Track the image statistics.** Form two views of each 160-pixel input. For the first, blend every pixel equally with its reflect-padded 3 × 3 neighborhood average, then resize to 192 pixels. Resize the original directly to 256 pixels for the second view. Both use bilinear interpolation. Each size has its own batch-normalization (BN) statistics. Before prediction, update the tracked mean and variance with a fixed rate of 0.4. Mix the updated statistics equally with the source checkpoint’s statistics.
 2. **Average views and refine by visual similarity.** At each size, run the original batch, its horizontal flip, and two random flip-and-shift views. Average their probabilities and penultimate features over both sizes. Let $p_i$ be the averaged class probabilities. Soften them with temperature 2 and apply LAME on a five-nearest-neighbor graph of batch features to get $z_i$.
 3. **Estimate a local class prior.** For image $i$, count the LAME probabilities from the current and preceding batches. Give a row at stream distance $d$ weight $\exp(-d/12)$, exclude row $i$, and add 0.2 to every class count. Calling the counts $h_i$, the final soft target for class $c$ is proportional to $p_{ic}^{4/3} z_{ic}^{2/3} h_{ic}$. Return its argmax.
-4. **Adapt for the next batch.** Use the soft targets for three Adam updates at learning rate 0.001. Minimize soft cross-entropy on shifted 160-pixel views, updating only the BN scale and bias. The targets come from model predictions. We used validation labels for tuning and scoring.
+4. **Adapt for the next batch.** Use the soft targets for three Adam updates at learning rate 0.001. Minimize soft cross-entropy on shifted views from the smoothed 192-pixel branch, updating only the BN scale and bias. The targets come from model predictions. We used validation labels for tuning and scoring.
 
 LAME follows Boudiaf et al., *Parameter-free Online Test-time Adaptation*, CVPR 2022. [Implementation and code attribution](starter/tta/lame.py) · [Local class prior](starter/tta/mixtta_ms.py)
 
-The reported Kaggle public score for this CSV is **0.92789**, up from 0.91585 for the matched fixed-tracking baseline (+1.20 percentage points). The historical best in the repository was 0.93831.
+The previous local-prior CSV scored **0.92789** on the public leaderboard, up from 0.91585 for its fixed-tracking baseline. The historical best recorded in the repository is 0.93831. The new submission awaits a Kaggle score. [Previously scored CSV](out/mixtta_local_fixed/test_pred.csv)
 
-The official harness generated the 12,288 submission predictions in one online pass. It recorded 25.9 seconds and a peak of 4,150 MiB on an RTX 5090. The submission checker verified the CSV against its run log. The 90-second limit on the TAs’ RTX 3090 remains unverified. [Run log](out/mixtta_local_fixed/test_run_log.json)
+The official harness generated all 12,288 predictions in one test pass after validation selection. It recorded 82.3 seconds and 5,374 MiB peak memory on a shared RTX 5090. The checker verified the CSV and flagged the timing margin. The course requires 90 seconds on an RTX 3090, where runtime is unverified. [Official run log](out/mixtta_local_smooth192/test_run_log.json)
 
 ## Q3 Strategies and validation results
 
@@ -64,16 +64,19 @@ The official harness generated the 12,288 submission predictions in one online p
 
 ### Validation checks
 
-The fixed-tracking submission averaged **93.92%** over seven stream orders, four offsets and two seeds. Its matched baseline averaged **93.12%**. On the 231-batch stream, accuracy rose from 94.70% on the first 2,112 images to 97.77% on the last 2,112. The largest class share in the final window was 5.26%, passing the collapse check. [Fixed-tracking results by order](out/mixtta_local_fixed/val_protocol.json)
+**Input scale and smoothing.** Increasing both sizes improved official validation by ten images, but lost 44 correct predictions when we recompressed the validation images. Smoothing only the 192-pixel view recovered those losses. The selected preset corrected 32 of the previous preset’s mistakes and introduced 28 on the official stream. The shuffled, JPEG and contrast/noise checks each reuse the 2,112 validation images and informed selection.
 
-| Validation measure | Stage 5 | Stage 5 + local prior |
-|---|---:|---:|
-| Official order | 94.74% | 96.07% |
-| Mean of 7 orders × 4 offsets × 2 seeds | 93.91% | 94.84% |
-| Shuffled within each domain | 80.73% | 85.98% |
-| Additional JPEG compression, quality 35 | 87.88% | 89.77% |
+| Fixed-tracking preset | Official correct | Shuffled within domain | JPEG quality 35 | Contrast and noise |
+|---|---:|---:|---:|---:|
+| 160 + 224, previous submission | 2,009 | 1,856 | 1,877 | 1,935 |
+| 192 + 256 | 2,019 | 1,886 | 1,833 | 1,918 |
+| **192 smoothed + 256** | **2,013** | **1,857** | **1,878** | **1,945** |
 
-The shuffled control used NumPy seed 17 for the within-domain permutations and adaptation seed 0. Raising the source BN weight from 0.5 to 0.7 gave 96.02% in the official order with the local prior, but only 62.83% in that shuffled control. The branch preset retains the original source weight of 0.5. The JPEG control was run after choosing the local prior. Each check reuses validation images. [Stage-5 results by order](out/mixtta_local/val_protocol.json)
+We also combined two independently adapting copies of the source model, one at each pair of resolutions. Averaging their log probabilities reached 95.60% on official validation. The single smoothed model averaged 94.69% on the three screening configurations above, versus 94.48% for the ensemble, and used three gradient updates per batch versus six.
+
+Each control uses adaptation seed 0. The within-domain permutation uses NumPy seed 17. The photometric control applies random per-image contrast in [0.55, 1.20] and Gaussian noise with standard deviation 0.04 on a 0–1 pixel scale, using seed 113. [Control code](tools/dev/val_controls.py) · [Correct counts](out/mixtta_local_smooth192/val_controls.json)
+
+Across seven orders, four offsets and two seeds (56 validation runs), mean accuracy rose from **93.92% to 94.84%**. Each of the seven order averages improved. On the continuous 231-batch stream, the new preset scored 95.45% on the first 2,112 images and 98.30% on the last 2,112. The most frequent predicted class accounted for 5.26% of the final window, passing the collapse check. [Previous protocol](out/mixtta_local_fixed/val_protocol.json) · [New protocol](out/mixtta_local_smooth192/val_protocol.json)
 
 ### Earlier stage-wise validation sweep
 
@@ -105,7 +108,7 @@ Each value is top-1 accuracy on the official validation stream. The full per-met
 | Single-scale MixTTA | Full 89.06, previous batch’s statistics 84.66, remove LAME 86.41, remove augmented views 86.93, mixed statistics alone 83.19 |
 | BN ablations with MixTTA | Frozen source 55.82, current batch 80.68, robust batch statistics 82.24, fast tracking with zero source weight 86.51 |
 | Self-training MixTTA at 160 px | Forward only 90.10, one update 91.15, two updates 91.90 |
-| Multi-scale MixTTA with fixed tracking | Baseline 93.99, **local prior 95.12** |
+| Multi-scale MixTTA with fixed tracking | Baseline 93.99, local prior 95.12, **larger views with smoothing 95.31** |
 | Multi-scale MixTTA with shift detection | Stage 5 baseline 94.74, local prior 96.07 |
 
 ## Q4 Validation examples
@@ -114,11 +117,11 @@ Each value is top-1 accuracy on the official validation stream. The full per-met
 
 The top row shows four correct predictions and the bottom row shows four errors. Each image carries its predicted class, ground truth, stream position, and validation domain. We sampled with seed 0, taking one example per domain and a second scan-line example in each row.
 
-| Validation domain | Images | Baseline errors | Errors with local prior |
+| Validation domain | Images | Errors with previous preset | Errors with new preset |
 |---|---:|---:|---:|
-| Scan-line grid | 776 | 47 | 36 |
-| Wavy warp | 724 | 40 | 32 |
-| Fisheye | 612 | 40 | 35 |
-| **All** | **2,112** | **127** | **103** |
+| Scan-line grid | 776 | 36 | 36 |
+| Wavy warp | 724 | 32 | 40 |
+| Fisheye | 612 | 35 | 23 |
+| **All** | **2,112** | **103** | **99** |
 
-The fox and husky remain recognizable through the scan lines, and the eagle’s white head is visible inside the fisheye border. Three illustrated errors involve vehicles. The warp bends the yellow school bus (#842) into a curved shape that the model calls an acoustic guitar. The scan lines obscure the outlines of the fire engine (#37) and sports car (#356). In the fisheye example (#1861), the laptop screen reflects the landscape and the model predicts sports car. Regenerate the figure with `python tools/plot_val_examples.py --method mixtta_local_fixed`.
+The largest gain came from the fisheye domain, with 12 fewer errors. The wavy-warp domain had eight more. The new preset recognized the bald eagle (#1354) under that warp and the tabby (#2106) inside the fisheye border. It called both a scan-line mountain bike (#211) and a scan-line sports car (#607) a steam locomotive. Regenerate the figure with `python tools/plot_val_examples.py --method mixtta_local_smooth192`.

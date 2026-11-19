@@ -69,12 +69,13 @@ class MixTTAMS:
                  shift_thr=0.0, alpha_min=None, extra_train=(), extra_lr=1e-4, temporal_mu=0.0, temporal_eps=0.1,
                  split_shift=False, split_min=4, split_train="new", refine_batches=0,
                  st_weight=None, st_pow=1.0, st_ent=None, ema_pred=0.0, refine_steps=None,
-                 opt_reset=False, stage_lr=None, lame_q=None, local_context=False):
+                 opt_reset=False, stage_lr=None, lame_q=None, local_context=False, smooth_sizes=()):
         setup_cuda()
         if deterministic:  # fixed cuDNN algorithms: reruns give the same predictions (slower)
             torch.backends.cudnn.benchmark = False
             torch.backends.cudnn.deterministic = True
         self.sizes = list(sizes)
+        self.smooth_sizes = tuple(smooth_sizes)
         self.model = configure_multi_mix_norm(model, alpha, w, len(self.sizes)).requires_grad_(False)
         self.model = self.model.to(memory_format=torch.channels_last)
         self.layers = [m for m in self.model.modules() if isinstance(m, MultiMixBN2d)]
@@ -214,8 +215,11 @@ class MixTTAMS:
         self.t += 1
         return alpha
 
-    @staticmethod
-    def _resize(x, s):
+    def _resize(self, x, s):
+        """Optionally soften the native-resolution input before scaling it for this branch."""
+        if s in self.smooth_sizes:
+            neighbourhood = F.avg_pool2d(F.pad(x, (1, 1, 1, 1), mode="reflect"), 3, stride=1)
+            x = x.lerp(neighbourhood, 0.5)
         return x if s == x.size(-1) else F.interpolate(x, size=(s, s), mode="bilinear", align_corners=False)
 
     @torch.no_grad()

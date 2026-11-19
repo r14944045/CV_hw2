@@ -1,0 +1,21 @@
+{
+  "n": 2112,
+  "seed": 0,
+  "correct": {
+    "shuffle": {
+      "mixtta_local_fixed": 1856,
+      "mixtta_local_192_256": 1886,
+      "mixtta_local_smooth192": 1857
+    },
+    "jpeg": {
+      "mixtta_local_fixed": 1877,
+      "mixtta_local_192_256": 1833,
+      "mixtta_local_smooth192": 1878
+    },
+    "photometric": {
+      "mixtta_local_fixed": 1935,
+      "mixtta_local_192_256": 1918,
+      "mixtta_local_smooth192": 1945
+    }
+  }
+}

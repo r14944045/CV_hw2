@@ -66,6 +66,8 @@ METHODS = {
     "mixtta_ms224": MixTTAMS,
     # Fixed BN tracking as in ms224, plus the validation-derived local class prior.
     "mixtta_local_fixed": partial(MixTTAMS, local_context=True),
+    "mixtta_local_192_256": partial(MixTTAMS, sizes=(192, 256), local_context=True),
+    "mixtta_local_smooth192": partial(MixTTAMS, sizes=(192, 256), smooth_sizes=(192,), local_context=True),
     "mixtta_ms3": partial(MixTTAMS, sizes=(160, 192, 224), steps=2),
     "mixtta_ms3s3": partial(MixTTAMS, sizes=(160, 192, 224)),
     # + class-prior correction from the counts of predicted labels so far (tta/mixtta_ms.py, step 3b)
