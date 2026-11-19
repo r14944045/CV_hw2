@@ -386,14 +386,34 @@ class MixTTAMS:
 class LocalPriorReadout(MixTTAMS):
     """Predict from nearby training targets while retaining the original targets for adaptation."""
 
-    def __init__(self, model):
+    def __init__(self, model, calibrate=False):
         super().__init__(model, sizes=(192, 256), smooth_sizes=(192,), local_context=True)
         self.previous_targets = None
+        self.calibrate = calibrate
+        self.background = None
+
+    def _background_log_prob(self, log_prob, target):
+        """Track each class's mean log probability on rows assigned to other classes."""
+        classes = torch.arange(target.size(1), device=target.device)
+        other = classes != target.argmax(1, keepdim=True)
+        count = other.sum(0)
+        batch = (log_prob * other).sum(0) / count.clamp_min(1)
+        if self.background is None:
+            observed = count > 0
+            fallback = batch.sum() / observed.sum().clamp_min(1)
+            self.background = torch.where(observed, batch, fallback)
+        else:
+            batch = torch.where(count > 0, batch, self.background)
+            self.background = self.background.lerp(batch, 0.15)
+        return self.background
 
     def _output_labels(self, out, target):
         image_prob = torch.stack([prob for prob, _ in out]).mean(0)
         graph_prob = self.previous_graph_probs  # _predict just stored the current batch
         counts = self._local_counts(target, self.previous_targets, 8.0)
         self.previous_targets = target.detach()
-        log_evidence = image_prob.clamp_min(1e-12).log().lerp(graph_prob.clamp_min(1e-12).log(), 0.25)
-        return (log_evidence + 0.5 * counts.log()).argmax(1)
+        log_prob = image_prob.clamp_min(1e-12).log()
+        scores = log_prob.lerp(graph_prob.clamp_min(1e-12).log(), 0.25) + 0.5 * counts.log()
+        if self.calibrate:
+            scores = scores - self._background_log_prob(log_prob, target)
+        return scores.argmax(1)

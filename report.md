@@ -41,18 +41,20 @@
 
 ## Q2 Method
 
-The new CSV comes from `mixtta_local_smooth192`. It uses the supplied 20-class ResNet-50 and an online batch size of 64. The only state required for the local class prior is the previous batch’s 20-way class probabilities.
+The latest CSV comes from `mixtta_local_calibrated`. It uses the supplied 20-class ResNet-50 and an online batch size of 64. It retains the preceding batch’s graph probabilities and soft targets, plus one running value per class.
 
 1. **Track the image statistics.** Form two views of each 160-pixel input. For the first, blend every pixel equally with its reflect-padded 3 × 3 neighborhood average, then resize to 192 pixels. Resize the original directly to 256 pixels for the second view. Both use bilinear interpolation. Each size has its own batch-normalization (BN) statistics. Before prediction, update the tracked mean and variance with a fixed rate of 0.4. Mix the updated statistics equally with the source checkpoint’s statistics.
 2. **Average views and refine by visual similarity.** At each size, run the original batch, its horizontal flip, and two random flip-and-shift views. Average their probabilities and penultimate features over both sizes. Let $p_i$ be the averaged class probabilities. Soften them with temperature 2 and apply LAME on a five-nearest-neighbor graph of batch features to get $z_i$.
-3. **Estimate a local class prior.** For image $i$, count the LAME probabilities from the current and preceding batches. Give a row at stream distance $d$ weight $\exp(-d/12)$, exclude row $i$, and add 0.2 to every class count. Calling the counts $h_i$, the final soft target for class $c$ is proportional to $p_{ic}^{4/3} z_{ic}^{2/3} h_{ic}$. Return its argmax.
+3. **Estimate a local class prior.** For image $i$, count the LAME probabilities from the current and preceding batches. Give a row at stream distance $d$ weight $\exp(-d/12)$, exclude row $i$, and add 0.2 to every class count. Calling the counts $h_i$, the final soft target for class $c$ is proportional to $p_{ic}^{4/3} z_{ic}^{2/3} h_{ic}$. Use this target for self-training and the output rule in Q3.
 4. **Adapt for the next batch.** Use the soft targets for three Adam updates at learning rate 0.001. Minimize soft cross-entropy on shifted views from the smoothed 192-pixel branch, updating only the BN scale and bias. The targets come from model predictions. We used validation labels for tuning and scoring.
+
+*For the submitted labels*, we also count nearby training targets and subtract the running background log probability for each class, as defined in Q3.
 
 LAME follows Boudiaf et al., *Parameter-free Online Test-time Adaptation*, CVPR 2022. [Implementation and code attribution](starter/tta/lame.py) · [Local class prior](starter/tta/mixtta_ms.py)
 
 The previous local-prior CSV scored **0.92789** on the public leaderboard, up from 0.91585 for its fixed-tracking baseline. The historical best recorded in the repository is 0.93831. The new submission awaits a Kaggle score. [Previously scored CSV](out/mixtta_local_fixed/test_pred.csv)
 
-The official harness generated all 12,288 predictions in one test pass after validation selection. It recorded 82.3 seconds and 5,374 MiB peak memory on a shared RTX 5090. The checker verified the CSV and flagged the timing margin. The course requires 90 seconds on an RTX 3090, where runtime is unverified. [Official run log](out/mixtta_local_smooth192/test_run_log.json)
+The original harness generated 12,288 labels in one test pass after we selected the method on validation. The checker verified the CSV. The shared RTX 5090 recorded 84.5 seconds and 5,374 MiB peak memory. The grading limit is 90 seconds on an RTX 3090, where runtime is unverified. [Official run log](out/mixtta_local_calibrated/test_run_log.json)
 
 ## Q3 Strategies and validation results
 
@@ -76,34 +78,25 @@ We also combined two independently adapting copies of the source model, one at e
 
 Each control uses adaptation seed 0. The within-domain permutation uses NumPy seed 17. The photometric control applies random per-image contrast in [0.55, 1.20] and Gaussian noise with standard deviation 0.04 on a 0–1 pixel scale, using seed 113. [Control code](tools/dev/val_controls.py) · [Correct counts](out/mixtta_local_smooth192/val_controls.json)
 
-Across seven orders, four offsets and two seeds (56 validation runs), mean accuracy rose from **93.92% to 94.84%**. Each of the seven order averages improved. On the continuous 231-batch stream, the new preset scored 95.45% on the first 2,112 images and 98.30% on the last 2,112. The most frequent predicted class accounted for 5.26% of the final window, passing the collapse check. [Previous protocol](out/mixtta_local_fixed/val_protocol.json) · [New protocol](out/mixtta_local_smooth192/val_protocol.json)
+Across seven orders, four offsets and two seeds (56 validation runs), mean accuracy rose from **93.92% to 94.84%**. Each of the seven order averages improved. On the continuous 231-batch stream, the smoothed preset scored 95.45% on the first 2,112 images and 98.30% on the last 2,112. The most frequent predicted class accounted for 5.26% of the final window, passing the collapse check. [Previous protocol](out/mixtta_local_fixed/val_protocol.json) · [New protocol](out/mixtta_local_smooth192/val_protocol.json)
 
-### Prediction from nearby self-training targets
+### Prediction from nearby self-training targets and class calibration
 
-The smoothed model supplies an image probability $p_i$, a graph probability $z_i$ and a soft training target $t_i$. For prediction we estimated a second class prior from nearby **training targets**, with distance weights $\exp(-d/8)$ and 0.2 added to each class count. As in Q2, we excluded the query row and used the current and previous batches. We returned the class with the highest $0.75\log p_i + 0.25\log z_i + 0.5\log h_i$, where $h_i$ is the new count vector. The self-training loss still uses $t_i$.
+The smoothed model supplies an image probability $p_i$, a graph probability $z_i$ and a soft training target $t_i$. For prediction we estimated a second class prior from nearby **training targets**, with distance weights $\exp(-d/8)$ and 0.2 added to each class count. As in Q2, we excluded the query row and used the current and previous batches. The intermediate rule scored classes by $0.75\log p_i + 0.25\log z_i + 0.5\log a_i$, where $a_i$ is the new count vector. The self-training loss still uses $t_i$.
+
+**Class calibration.** For each class, we measured its mean log image probability on current rows whose most likely training target was another class. We initialized this value from the first batch and updated it with an exponential moving average at rate 0.15. We subtracted the running value from that class’s output score before taking the argmax. If a class had no eligible rows, we retained its previous value or used the mean of the other available classes at initialization.
 
 | Output rule | Official correct | 56-run mean | Shuffle | JPEG | Contrast/noise |
 |---|---:|---:|---:|---:|---:|
 | Smoothed model | 2,013 | 94.84% | 1,857 | 1,878 | 1,945 |
 | Nearby training targets | 2,023 | 95.03% | 1,860 | 1,884 | 1,948 |
+| **Nearby targets + class calibration** | **2,025** | **95.22%** | **1,869** | **1,890** | **1,951** |
 
-The official validation counts come from end-to-end runs. For the longer protocol we replayed the model’s chronological validation outputs through each prediction rule, starting with empty state for every run. We checked the replay against every official validation prediction. [Validation log](out/mixtta_local_readout/val_run_log.json) · [Stream-order results](out/mixtta_local_readout/val_protocol.json)
+The official validation counts come from end-to-end runs. For the longer protocol we replayed the model’s chronological validation outputs through each prediction rule, starting with empty state for every run. We checked the replay against every official validation prediction. The calibrated rule scored 96.07% in the first window and 98.25% in the final window of the 231-batch run. The largest final class share was 5.26%. [Intermediate protocol](out/mixtta_local_readout/val_protocol.json) · [Calibrated protocol](out/mixtta_local_calibrated/val_protocol.json) · [Controls](out/mixtta_local_calibrated/val_controls.json)
 
-### Earlier stage-wise validation sweep
+As a separate check after choosing the settings, we reduced the validation images to 96 pixels with antialiased bilinear interpolation, then enlarged them back to 160 pixels. The smoothed model got 1,950 correct, nearby targets alone got 1,949, and class calibration got 1,961. [Reduced-resolution results](out/mixtta_local_calibrated/val_low_resolution.json)
 
-A separate experiment scored each setting over 56 validation runs. It chose the simplest setting within 0.3 percentage points of the best after a 231-batch collapse check. The score in this table is the mean over orders, offsets and seeds. The CSV uses the fixed-tracking method described in Q2.
-
-| Stage | Candidates | Kept | Score (%) |
-|---|---|---|---:|
-| 1 | self-training steps 2/3/4 × LAME T 1/2/3 | 3 steps, T = 2 (4 steps, T = 2: 93.33, within the margin) | 93.12 |
-| 2 | no reset; reset with rate floor 0.4/0.2/0.1/0.05 | reset, floor 0.2 (0.1: 93.57, within the margin) | 93.52 |
-| 3 | in-batch split off/on | on | 93.91 |
-| 4 | second pass on a domain's first 0/1/2/3 batches | none (3 batches: 94.09, within the margin) | 93.91 |
-| 5 | class prior λ = 0/1/2/3 | none (λ = 1: 93.96, within the margin) | 93.91 |
-| 6 | 12 per-stage learning-rate settings and the uniform baseline | Multipliers (2, 2, 2, 1, 0.25) from stem to layer 4, within the margin of the best score of 94.41 | 94.16 |
-| 7 | fixed temperature or adaptive confidence targets of 0.4, 0.3, 0.2 | Fixed T = 2. All three adaptive targets were within the 0.3-point margin (94.30, 94.31, 94.18) | 94.16 |
-
-The sweep finished with the stage-6 learning rates and fixed temperature. Its selected setting passed the long-stream check. [Final configuration and scores](out/val_exp/repick_final.json)
+**Earlier stage-wise sweep.** A separate 56-run study evaluated self-training, a shift detector, in-batch domain splitting, an extra prediction pass, a cumulative class prior, layer-specific learning rates, and an adaptive temperature. Their successive selected means were 93.12%, 93.52%, 93.91%, 93.91%, 93.91%, 94.16% and 94.16%. Within 0.3 points of the best passing setting, the sweep preferred the simplest option. The submitted preset uses fixed BN tracking. [Stage-by-stage table](https://github.com/r14944045/CV_hw2/blob/65b3496/report.md#earlier-stage-wise-validation-sweep) · [Archived scores](out/val_exp/repick_final.json)
 
 ### Method comparisons
 
@@ -119,7 +112,7 @@ Each value is top-1 accuracy on the official validation stream. The full per-met
 | Single-scale MixTTA | Full 89.06, previous batch’s statistics 84.66, remove LAME 86.41, remove augmented views 86.93, mixed statistics alone 83.19 |
 | BN ablations with MixTTA | Frozen source 55.82, current batch 80.68, robust batch statistics 82.24, fast tracking with zero source weight 86.51 |
 | Self-training MixTTA at 160 px | Forward only 90.10, one update 91.15, two updates 91.90 |
-| Multi-scale MixTTA with fixed tracking | Baseline 93.99, local prior 95.12, **larger views with smoothing 95.31** |
+| Multi-scale MixTTA with fixed tracking | Baseline 93.99, local prior 95.12, larger views with smoothing 95.31, **calibrated output 95.88** |
 | Multi-scale MixTTA with shift detection | Stage 5 baseline 94.74, local prior 96.07 |
 
 ## Q4 Validation examples
@@ -128,11 +121,11 @@ Each value is top-1 accuracy on the official validation stream. The full per-met
 
 The top row shows four correct predictions and the bottom row shows four errors. Each image carries its predicted class, ground truth, stream position, and validation domain. We sampled with seed 0, taking one example per domain and a second scan-line example in each row.
 
-| Validation domain | Images | Errors with previous preset | Errors with new preset |
+| Validation domain | Images | Errors with smoothed model | Errors with calibrated model |
 |---|---:|---:|---:|
-| Scan-line grid | 776 | 36 | 36 |
-| Wavy warp | 724 | 32 | 40 |
-| Fisheye | 612 | 35 | 23 |
-| **All** | **2,112** | **103** | **99** |
+| Scan-line grid | 776 | 36 | 29 |
+| Wavy warp | 724 | 40 | 38 |
+| Fisheye | 612 | 23 | 20 |
+| **All** | **2,112** | **99** | **87** |
 
-The largest gain came from the fisheye domain, with 12 fewer errors. The wavy-warp domain had eight more. The new preset recognized the bald eagle (#1354) under that warp and the tabby (#2106) inside the fisheye border. It called both a scan-line mountain bike (#211) and a scan-line sports car (#607) a steam locomotive. Regenerate the figure with `python tools/plot_val_examples.py --method mixtta_local_smooth192`.
+The new method reduced errors in all three domains. The largest gain was seven images in the scan-line domain. The model recognized the fire engine under wavy distortion (#918), but labeled the golden retriever in the same domain an acoustic guitar (#828). In the fisheye domain it recognized the timber wolf (#1561) and mistook the steam locomotive for a mountain bike (#1990). Regenerate the figure with `python tools/plot_val_examples.py --method mixtta_local_calibrated`.

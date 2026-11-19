@@ -1,0 +1,11 @@
+{
+  "n": 2112,
+  "seed": 0,
+  "correct": {
+    "low_resolution": {
+      "mixtta_local_smooth192": 1950,
+      "mixtta_local_readout": 1949,
+      "mixtta_local_calibrated": 1961
+    }
+  }
+}

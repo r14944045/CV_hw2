@@ -1,0 +1,15 @@
+{
+  "n": 2112,
+  "seed": 0,
+  "correct": {
+    "shuffle": {
+      "mixtta_local_calibrated": 1869
+    },
+    "jpeg": {
+      "mixtta_local_calibrated": 1890
+    },
+    "photometric": {
+      "mixtta_local_calibrated": 1951
+    }
+  }
+}

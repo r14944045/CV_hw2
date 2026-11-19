@@ -6,6 +6,7 @@ import json
 import numpy as np
 from PIL import Image
 import torch
+import torch.nn.functional as F
 
 import fe
 
@@ -34,9 +35,21 @@ def contrast_and_noise(images):
     return torch.cat(result)
 
 
+def low_resolution(images):
+    result = []
+    for batch in images.split(64):
+        down = F.interpolate(batch.float(), (96, 96), mode="bilinear", align_corners=False, antialias=True)
+        up = F.interpolate(down, images.shape[-2:], mode="bilinear", align_corners=False)
+        result.append(up.round().clamp(0, 255).byte())
+    return torch.cat(result)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("methods", nargs="+", choices=sorted(fe.METHODS))
+    transforms = {"shuffle": None, "jpeg": jpeg_images, "photometric": contrast_and_noise,
+                  "low_resolution": low_resolution}
+    parser.add_argument("--controls", nargs="+", choices=transforms, default=("shuffle", "jpeg", "photometric"))
     args = parser.parse_args()
     data = fe.data("val")
     bounds = data["bounds"]
@@ -44,8 +57,9 @@ def main():
     shuffled = np.concatenate([rng.permutation(np.arange(lo, hi)) for lo, hi in zip(bounds, bounds[1:])])
     labels = data["y"].numpy()
     results = {"n": len(labels), "seed": 0, "correct": {}}
-    for name, order, transform in (("shuffle", shuffled, None), ("jpeg", None, jpeg_images),
-                                   ("photometric", None, contrast_and_noise)):
+    for name in args.controls:
+        transform = transforms[name]
+        order = shuffled if name == "shuffle" else None
         images = transform(data["x"]) if transform else None
         expected = labels if order is None else labels[order]
         results["correct"][name] = {}
