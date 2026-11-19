@@ -55,7 +55,8 @@ class Recorder(MixTTAMS):
         return d
 
 
-def measure(thr):
+def measure(thr, cfg=None):
+    cfg = CFG if cfg is None else cfg
     b = fe.data("val")["bounds"]
     dom = np.zeros(b[-1], int); dom[b[1]:b[2]] = 1; dom[b[2]:] = 2
     W, E, misses, false_alarms, n_streams = [], [], 0, 0, 0
@@ -65,7 +66,7 @@ def measure(thr):
             holder = {}
 
             def fac(model):
-                holder["m"] = Recorder(model, shift_thr=thr, **CFG)
+                holder["m"] = Recorder(model, **{**cfg, "shift_thr": thr})
                 return holder["m"]
 
             fe.run(fac, "val", idx)
@@ -93,6 +94,25 @@ def rule(W, E):
     if np.nanmin(E) > thr:
         return float(thr), "ceil(2 * max within-domain)"
     return round(math.sqrt(W.max() * np.nanmin(E)), 1), "fallback: geometric mean"
+
+
+def derive(cfg=None, thr=10.0, verbose=True):
+    """Iterate the rule to a fixed point for the tracking settings in cfg; returns (shift_thr, log lines)."""
+    log = []
+    for it in range(8):
+        W, E, misses, fa, n = measure(thr, cfg)
+        new, how = rule(W, E)
+        line = (f"[run at thr {thr:g}] {n} streams, {len(W)} within-domain batches, {len(E)} boundary events | "
+                f"within: max {W.max():.2f}, 99th pct {np.percentile(W, 99):.2f}, median {np.median(W):.2f} | "
+                f"events: min {np.nanmin(E):.1f}, median {np.nanmedian(E):.1f} | misses {misses}, false alarms {fa} "
+                f"-> rule gives {new:g} ({how})")
+        log.append(line)
+        if verbose:
+            print(line, flush=True)
+        if new == thr:
+            break
+        thr = new
+    return thr, log
 
 
 def main():
