@@ -87,6 +87,9 @@ METHODS = {
     # mixtta_ms224sp2cprl3 with the shift threshold chosen on val only (tools/dev/threshold_val.py): 8.7
     "mixtta_ms224sp2cprl3v": partial(MixTTAMS, shift_thr=8.7, alpha_min=0.1, prior_lambda=2.0, split_shift=True,
                                      refine_batches=2, stage_lr=(3, 3, 3, 1, 0.1)),
+    # floor of the val-only re-pick (tools/dev/repick.py): stage-1 pick so far (2 steps, LAME T 1), every later
+    # stage at its simplest option (no shift reset, split, second pass, class prior, per-stage lr or adaptive T)
+    "mixtta_repick_floor": partial(MixTTAMS, sizes=(160, 224), steps=2, lame_T=1.0),
     # + adaptive LAME temperature (step 3a): per batch, T such that the mean max-probability is 0.3
     "mixtta_ms224sp2cprl3q3": partial(MixTTAMS, shift_thr=10.0, alpha_min=0.1, prior_lambda=2.0, split_shift=True,
                                       refine_batches=2, stage_lr=(3, 3, 3, 1, 0.1), lame_q=0.3),
