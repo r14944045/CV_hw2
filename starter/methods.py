@@ -94,6 +94,10 @@ METHODS = {
     # shift reset with rate floor 0.2, val-rule threshold 9.0, in-batch split; no second pass, no class prior
     "mixtta_repick_s5": partial(MixTTAMS, sizes=(160, 224), steps=3, lame_T=2.0, alpha_min=0.2, shift_thr=9.0,
                                 split_shift=True),
+    # final val-only re-pick (tools/dev/repick_final.json): stage 5 + per-stage self-training learning rates
+    # x(2, 2, 2, 1, 0.25) for stem, layer1-layer4 (stage 6); no adaptive temperature (stage 7)
+    "mixtta_repick": partial(MixTTAMS, sizes=(160, 224), steps=3, lame_T=2.0, alpha_min=0.2, shift_thr=9.0,
+                             split_shift=True, stage_lr=(2, 2, 2, 1, 0.25)),
     # + adaptive LAME temperature (step 3a): per batch, T such that the mean max-probability is 0.3
     "mixtta_ms224sp2cprl3q3": partial(MixTTAMS, shift_thr=10.0, alpha_min=0.1, prior_lambda=2.0, split_shift=True,
                                       refine_batches=2, stage_lr=(3, 3, 3, 1, 0.1), lame_q=0.3),
