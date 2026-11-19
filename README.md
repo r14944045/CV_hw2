@@ -2,19 +2,31 @@
 
 Assignment spec: [HW2.md](HW2.md). Experiments and method write-ups: [report.md](report.md).
 
+## Setup
+
+Python 3.10 and a CUDA GPU with bf16 support (Ampere or newer). The pinned versions in [requirements.txt](requirements.txt) are the ones every run here used.
+
+```bash
+python3.10 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cu129
+```
+
+Unzip the dataset into `data/` (from `ntu-cvpdl-2026-hw-2.zip`) and put `source_resnet50_160.pth` in the repo root.
+
 ## Data use
 
 - Only the official harness ([starter/harness.py](starter/harness.py), unmodified) reads the test stream, in one online pass per submission (`starter/run.py --split test`).
 - Settings are chosen on val ([tools/dev/](tools/dev/), val only) and with Kaggle public scores.
 
-## Final method
+## Best submission
 
 | | |
 |---|---|
-| Method | `mixtta_ms224sp2cprl3v` (details below) |
-| Kaggle public | not scored yet |
+| Method | `mixtta_ms224sp2cprl3` (details below). Reproduce it with `mixtta_ms224sp2cprl3v`, which gives a byte-identical test file |
+| Kaggle public | **0.93831** |
 | Val accuracy | 95.60 % (harness) |
-| Peak VRAM | 4.6 GB (val run) |
+| Test-stream time | 27.3 s on an RTX 5090. The limit is 90 s on a 3090, where it has not been measured. Peak VRAM 4.6 GB |
+| Submitted file | `out/mixtta_ms224sp2cprl3v/test_pred.csv`, SHA-256 `4b5217d9336d2c875e5bff54be22fe9dbab42c54ec6c02f984e6d576ff793d8c` (torch 2.13.0+cu129, seed 0, RTX 5090) |
 | Code | [starter/tta/mixtta_ms.py](starter/tta/mixtta_ms.py), registered in [starter/methods.py](starter/methods.py) |
 
 The method is MixTTA-MS: self-training MixTTA at input sizes 160 and 224, with separate BN statistics per size.
@@ -25,7 +37,7 @@ The method is MixTTA-MS: self-training MixTTA at input sizes 160 and 224, with s
 - **Global class prior:** a correction with λ = 2.
 - **Second pass:** on the first 2 batches of each domain, the model self-trains first, then predicts the batch again.
 
-`mixtta_ms224sp2cprl3` (Kaggle 0.93831, SHA-256 `4b5217d9…`) is the same method with a hand-set threshold of 10. On the val stream the two give identical predictions. Its test run took 29.1 s on an RTX 5090. The limit is 90 s on a 3090, and the time has not been measured on a 3090.
+`mixtta_ms224sp2cprl3` uses a hand-set threshold of 10, and `mixtta_ms224sp2cprl3v` the val-chosen 8.7. Otherwise they are the same method, and they give identical predictions on val and on test (same SHA-256).
 
 ### Generate the submission file
 
@@ -44,11 +56,29 @@ The file to upload is `out/$METHOD/test_pred.csv`. The method uses deterministic
 
 `bash tools/run_gpu.sh $METHOD` runs val (prints accuracy) and test, then runs the checker.
 
+## Val-only re-pick of the settings
+
+[tools/dev/repick.py](tools/dev/repick.py) re-chooses every MixTTA-MS setting from val alone. Its protocol is written in its docstring and was fixed before any run.
+- **Score:** each candidate runs on the 7 val stream orders × 4 positions of the domain boundaries within the batch × 2 seeds.
+- **Collapse veto:** the 7 orders back to back. It vetoes candidates that collapse but never ranks them.
+- **Choice:** in each of 7 stages, the simplest candidate within 0.3 pt of the best (stages: self-training steps and LAME temperature, statistics tracking, in-batch split, second pass, class prior, per-stage learning rates, adaptive temperature).
+- **Shift threshold:** each tracking setting gets its own, from the val rule in [tools/dev/threshold_val.py](tools/dev/threshold_val.py).
+
+It reads no test data.
+
+```bash
+cd tools/dev
+python cache.py      # decode the val images once into cache/val.pt (val only)
+python repick.py     # resumable: results in repick_results.jsonl, decisions in repick_log.txt
+```
+
+The final setting is written to `tools/dev/repick_final.json`. The run takes about 41 candidate evaluations of roughly 5 minutes each on an idle RTX 5090 with one worker (`WORKERS` in the script, about 4.7 GB of VRAM each). To produce a submission, register that setting in `starter/methods.py` and run the harness commands above with its name.
+
 ## Submission history (Kaggle public)
 
 | Method | Kaggle public | Val (%) |
 |---|---:|---:|
-| `mixtta_ms224sp2cprl3` | **0.93831** | 95.60 |
+| `mixtta_ms224sp2cprl3` (reproduced by `mixtta_ms224sp2cprl3v`) | **0.93831** | 95.60 |
 | `mixtta_ms224sp2cpr` | 0.93277 | 94.93 |
 | `mixtta_ms224sp2cp` | 0.93180 | 94.84 |
 | `mixtta_ms224sp3` | 0.92740 | — |

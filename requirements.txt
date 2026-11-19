@@ -1,0 +1,9 @@
+# Python 3.10. Pinned to the versions used for every run in this repo (RTX 5090, CUDA 12.9 wheels).
+# PyTorch comes from its CUDA wheel index:
+#   pip install -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cu129
+torch==2.13.0
+torchvision==0.28.0
+numpy==2.2.6
+pandas==2.3.3
+pillow==12.2.0
+matplotlib==3.10.9  # only for tools/plot_val_examples.py
