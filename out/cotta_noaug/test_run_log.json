@@ -1,0 +1,20 @@
+{
+ "split": "test",
+ "n": 12288,
+ "seconds": 9.5,
+ "peak_vram_mib": 5218.0,
+ "vram_ok": true,
+ "torch_max_reserved_mib": 4598.0,
+ "gpu": "NVIDIA GeForce RTX 5090",
+ "torch": "2.13.0+cu129",
+ "python": "3.10.13",
+ "pred_sha256": "c30ab12c7c98ea1ceb9c41cb06088b60d17b6b9cf964c5c97540b5a129068119",
+ "config": {
+  "method": "cotta_noaug",
+  "split": "test",
+  "data": "../data",
+  "ckpt": "../source_resnet50_160.pth",
+  "out": "../out/cotta_noaug",
+  "seed": 0
+ }
+}

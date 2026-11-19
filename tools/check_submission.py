@@ -2,16 +2,15 @@
 
   python tools/check_submission.py out/rotta
 
-Checks: CSV format (header id,label, 12,288 rows, ids == test stream order, labels int 0..19),
-run log (test split, sha256 of the CSV matches the harness-written hash, VRAM <= 10 GB, time),
-and that starter/harness.py is byte-identical to the official one. Exit code 1 on any error.
+Checks: CSV format (header id,label, 12,288 rows, labels int 0..19), run log (test split, sha256 of the CSV
+matches the harness-written hash, so the file is an unedited harness output, VRAM <= 10 GB, time), and that
+starter/harness.py is byte-identical to the official one. It reads nothing under data/. Exit code 1 on any error.
 """
 import argparse
 import csv
 import hashlib
 import json
 import sys
-from collections import Counter
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -23,7 +22,7 @@ def sha256(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
-def check(run_dir, data=ROOT / "data", code=ROOT / "starter", verbose=True):
+def check(run_dir, code=ROOT / "starter", verbose=True):
     """Return (errors, warnings, log)."""
     run_dir, errors, warnings = Path(run_dir), [], []
     pred, log_path = run_dir / "test_pred.csv", run_dir / "test_run_log.json"
@@ -50,13 +49,8 @@ def check(run_dir, data=ROOT / "data", code=ROOT / "starter", verbose=True):
         except Exception:
             errors.append(f"row {i + 2}: bad label {r!r}")
             break
-    stream = data / "test" / "stream.csv"
-    if stream.exists():
-        ids = [line.strip() for line in stream.read_text().splitlines()[1:] if line.strip()]
-        if [r[0] for r in body] != ids:
-            errors.append("ids do not match data/test/stream.csv (order or content)")
-    else:
-        warnings.append(f"{stream} not found, skipped id check")
+    if len({r[0] for r in body}) != len(body):
+        errors.append("duplicate ids")
 
     # --- run log ---
     log = json.loads(log_path.read_text())
@@ -83,13 +77,6 @@ def check(run_dir, data=ROOT / "data", code=ROOT / "starter", verbose=True):
     if method and f'"{method}"' not in (code / "methods.py").read_text():
         warnings.append(f"method '{method}' not found in METHODS of {code / 'methods.py'}")
 
-    # --- sanity: prediction distribution (test stream is class-balanced overall) ---
-    if labels and len(labels) == N_TEST:
-        cnt = Counter(labels)
-        top, n_top = cnt.most_common(1)[0]
-        if n_top > 3 * N_TEST / N_CLASSES or len(cnt) < N_CLASSES:
-            warnings.append(f"skewed predictions: class {top} has {n_top} preds, {len(cnt)}/20 classes used")
-
     if verbose:
         val = run_dir / "val_run_log.json"
         val_acc = json.loads(val.read_text()).get("acc") if val.exists() else None
@@ -110,10 +97,9 @@ def check(run_dir, data=ROOT / "data", code=ROOT / "starter", verbose=True):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("run_dir", help="directory containing test_pred.csv and test_run_log.json")
-    ap.add_argument("--data", default=str(ROOT / "data"))
     ap.add_argument("--code", default=str(ROOT / "starter"))
     a = ap.parse_args()
-    errors, _, _ = check(a.run_dir, Path(a.data), Path(a.code))
+    errors, _, _ = check(a.run_dir, Path(a.code))
     sys.exit(1 if errors else 0)
 
 

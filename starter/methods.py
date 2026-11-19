@@ -8,7 +8,7 @@ below with functools.partial, so each ablation is just `--method <name>`.
 """
 from functools import partial
 
-from tta import CoTTA, NormOnly, RoTTA, Source
+from tta import BOSA, CoTTA, MixTTA, MixTTAMS, NormOnly, RoTTA, Source
 
 METHODS = {
     # baselines
@@ -28,4 +28,74 @@ METHODS = {
     "cotta_norst": partial(CoTTA, restore=False),      # no stochastic restoration
     "cotta_fast": partial(CoTTA, n_aug=4),             # fewer augmentations (90 s budget)
     "cotta_rbn": partial(CoTTA, norm="robust"),        # CoTTA + Robust BN (non-i.i.d. stream)
+
+    # BOSA and ablations (cf. the paper's Table 2)
+    "bosa": BOSA,
+    "bosa_noreg": partial(BOSA, reg=0.0),              # w/o adaptive update constraint (Eqs. 5-7)
+    "bosa_noalign": partial(BOSA, adaptive=False, reg=0.0),  # w/o statistics alignment: fixed alpha=0.05 (RBN)
+    "bosa_nomem": partial(BOSA, use_memory=False),     # w/o balanced memory bank: current batch
+    "bosa_nosparse": partial(BOSA, q=0.0),             # w/o activation sparsification
+    "bosa_ent": partial(BOSA, loss="entropy"),         # w/o self-training: entropy minimisation
+    # deviation from the paper: halve the constraint step (2 * 0.5 * alpha_t <= 1). The literal step
+    # 2 * alpha_t > 1 for alpha_t > 0.5 reflects the stats through the source and can lock alpha_t at 1.
+    "bosa_stable": partial(BOSA, reg=0.5),
+    "bosa_stable_nomem": partial(BOSA, reg=0.5, use_memory=False),
+
+    # MixTTA (forward-only) and ablations
+    "mixtta": MixTTA,                                  # alpha=0.2, w=0.5, flip + 4 shifts, LAME
+    "mixtta_w7": partial(MixTTA, alpha=0.4, w=0.7),    # more source statistics, faster tracking
+    "mixtta_nolame": partial(MixTTA, use_lame=False),  # no LAME
+    "mixtta_noaug": partial(MixTTA, flip=False, n_shift=0),  # no flip/shift averaging
+    "mixtta_stats": partial(MixTTA, flip=False, n_shift=0, use_lame=False),  # mixed statistics only
+    "mixtta_lag": partial(MixTTA, update_first=False),  # predict before updating the statistics
+    # MixTTA with other normalisation statistics (MixBN2d settings; views use the stored statistics)
+    "mixtta_srcbn": partial(MixTTA, alpha=0.0),               # frozen source statistics
+    "mixtta_tbn": partial(MixTTA, alpha=1.0, w=0.0),          # current test batch only
+    "mixtta_rbn": partial(MixTTA, alpha=0.05, w=0.0),         # Robust BN (RoTTA's EMA), no source mix
+    "mixtta_w0": partial(MixTTA, w=0.0),                      # mixtta's alpha=0.2 without the source mix
+    # MixTTA + self-training on the LAME-corrected predictions (BN gamma/beta, Adam 1e-3)
+    "mixtta_st": partial(MixTTA, alpha=0.4, w=0.5, lame_feats="mean", lr=1e-3, train_steps=1),
+    "mixtta_st2": partial(MixTTA, alpha=0.4, w=0.5, lame_feats="mean", lr=1e-3, train_steps=2),
+    "mixtta_st_notrain": partial(MixTTA, alpha=0.4, w=0.5, lame_feats="mean"),  # same, without step 4
+    # MixTTA-MS (tta/mixtta_ms.py): MixTTA + self-training run at several input sizes (own statistics per
+    # size), fused views, bf16, deterministic cuDNN. Self-training at 160 only. Defaults: sizes (160, 224),
+    # flip + 2 shifts, LAME on T=2-softened probabilities, 3 Adam steps per batch.
+    "mixtta_ms224": MixTTAMS,
+    "mixtta_ms3": partial(MixTTAMS, sizes=(160, 192, 224), steps=2),
+    "mixtta_ms3s3": partial(MixTTAMS, sizes=(160, 192, 224)),
+    # + class-prior correction from the counts of predicted labels so far (tta/mixtta_ms.py, step 3b)
+    "mixtta_ms224p": partial(MixTTAMS, prior_lambda=1.0),
+    "mixtta_ms224p2": partial(MixTTAMS, prior_lambda=2.0),
+    # + domain-shift detection (tracker reset) and running-mean tracking within a domain (steps 0, 0b)
+    "mixtta_ms224s": partial(MixTTAMS, shift_thr=10.0, alpha_min=0.1),  # without the class prior
+    "mixtta_ms224sp2": partial(MixTTAMS, shift_thr=10.0, alpha_min=0.1, prior_lambda=2.0),
+    # mixtta_ms224sp2 (Kaggle 0.92724) variants: stronger / faster prior, a third input size, a temporal label prior
+    "mixtta_ms224sp3": partial(MixTTAMS, shift_thr=10.0, alpha_min=0.1, prior_lambda=3.0),
+    "mixtta_ms224sp2f": partial(MixTTAMS, shift_thr=10.0, alpha_min=0.1, prior_lambda=2.0, prior_tau=1000.0),
+    "mixtta_ms3sp2": partial(MixTTAMS, sizes=(160, 192, 224), shift_thr=10.0, alpha_min=0.1, prior_lambda=2.0),
+    "mixtta_ms224sp2t": partial(MixTTAMS, shift_thr=10.0, alpha_min=0.1, prior_lambda=2.0, temporal_mu=0.2),
+    # + in-batch split of the shift batch (step 0c): rows before the changepoint keep the old domain's statistics
+    "mixtta_ms224sp2cp": partial(MixTTAMS, shift_thr=10.0, alpha_min=0.1, prior_lambda=2.0, split_shift=True),
+    # + on the first 2 batches of a domain: self-train first, then predict again with the updated gamma/beta (step 5)
+    "mixtta_ms224sp2cpr": partial(MixTTAMS, shift_thr=10.0, alpha_min=0.1, prior_lambda=2.0, split_shift=True,
+                                  refine_batches=2),
+    # + per-stage self-training learning rates (step 4b): x(stem, layer1, layer2, layer3, layer4)
+    "mixtta_ms224sp2cprl": partial(MixTTAMS, shift_thr=10.0, alpha_min=0.1, prior_lambda=2.0, split_shift=True,
+                                   refine_batches=2, stage_lr=(2, 2, 2, 1, 0.25)),
+    "mixtta_ms224sp2cprl3": partial(MixTTAMS, shift_thr=10.0, alpha_min=0.1, prior_lambda=2.0, split_shift=True,
+                                    refine_batches=2, stage_lr=(3, 3, 3, 1, 0.1)),
+    # mixtta_ms224sp2cprl3 with the shift threshold chosen on val only (tools/dev/threshold_val.py): 8.7
+    "mixtta_ms224sp2cprl3v": partial(MixTTAMS, shift_thr=8.7, alpha_min=0.1, prior_lambda=2.0, split_shift=True,
+                                     refine_batches=2, stage_lr=(3, 3, 3, 1, 0.1)),
+    # + adaptive LAME temperature (step 3a): per batch, T such that the mean max-probability is 0.3
+    "mixtta_ms224sp2cprl3q3": partial(MixTTAMS, shift_thr=10.0, alpha_min=0.1, prior_lambda=2.0, split_shift=True,
+                                      refine_batches=2, stage_lr=(3, 3, 3, 1, 0.1), lame_q=0.3),
+    # domain-shift reset only: rate 1 on the shift batch, 1/2 on the next, then the usual 0.4
+    "mixtta_ms224r": partial(MixTTAMS, shift_thr=10.0, alpha_min=0.4),
+    "mixtta_ms224rp2": partial(MixTTAMS, shift_thr=10.0, alpha_min=0.4, prior_lambda=2.0),
+    # ablations
+    "mixtta_ms224_t1": partial(MixTTAMS, lame_T=1.0),  # mixtta_ms224 without the LAME temperature
+    "mixtta_ms": partial(MixTTAMS, sizes=(160, 192), n_shift=4, lame_T=1.0, steps=2),  # first multi-scale version
+    "mixtta_ms_notrain": partial(MixTTAMS, sizes=(160, 192), n_shift=4, lame_T=1.0, steps=0),
+    "mixtta_bf16": partial(MixTTAMS, sizes=(160,), n_shift=4, lame_T=1.0, steps=2),  # = mixtta_st2 in bf16
 }

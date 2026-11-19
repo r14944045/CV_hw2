@@ -1,0 +1,20 @@
+{
+ "split": "test",
+ "n": 12288,
+ "seconds": 24.6,
+ "peak_vram_mib": 2834.0,
+ "vram_ok": true,
+ "torch_max_reserved_mib": 3518.0,
+ "gpu": "NVIDIA GeForce RTX 5090",
+ "torch": "2.13.0+cu129",
+ "python": "3.10.13",
+ "pred_sha256": "4d6d4d7d0d0289d0c5f5e48e2a72c0ec9088162a4cc9269f73ef21ee3ccff91a",
+ "config": {
+  "method": "bosa",
+  "split": "test",
+  "data": "../data",
+  "ckpt": "../source_resnet50_160.pth",
+  "out": "../out/bosa",
+  "seed": 0
+ }
+}

@@ -1,0 +1,21 @@
+[val] 1280/2112  peak VRAM 4390 MiB
+{
+ "split": "val",
+ "n": 2112,
+ "seconds": 18.4,
+ "peak_vram_mib": 4390.0,
+ "vram_ok": true,
+ "torch_max_reserved_mib": 4496.0,
+ "gpu": "NVIDIA GeForce RTX 5090",
+ "torch": "2.13.0+cu129",
+ "python": "3.10.13",
+ "config": {
+  "method": "cotta_norst",
+  "split": "val",
+  "data": "../data",
+  "ckpt": "../source_resnet50_160.pth",
+  "out": "../out/val_exp/cotta_norst",
+  "seed": 0
+ },
+ "acc": 0.7760416666666666
+}

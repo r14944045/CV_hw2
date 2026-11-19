@@ -1,0 +1,20 @@
+{
+ "split": "test",
+ "n": 12288,
+ "seconds": 26.2,
+ "peak_vram_mib": 4150.0,
+ "vram_ok": true,
+ "torch_max_reserved_mib": 3518.0,
+ "gpu": "NVIDIA GeForce RTX 5090",
+ "torch": "2.13.0+cu129",
+ "python": "3.10.13",
+ "pred_sha256": "14ee137f2d0c0a808a2a5b4b2a82006ccea595bfba53ee57db20459f616dcf2c",
+ "config": {
+  "method": "mixtta_ms224_t1",
+  "split": "test",
+  "data": "../data",
+  "ckpt": "../source_resnet50_160.pth",
+  "out": "../out/mixtta_ms224_t1",
+  "seed": 0
+ }
+}
