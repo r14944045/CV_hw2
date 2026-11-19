@@ -1,6 +1,6 @@
 # CVPDL HW2 — practical test-time adaptation
 
-The submission on this branch uses `mixtta_local_fixed`. It classified **2,009 of 2,112 validation images correctly (95.12%)**, 24 more than the fixed-tracking MixTTA-MS baseline. It uses the supplied ResNet-50 and estimates a local class prior from the predictions of the current and preceding batches. [Method, results, and validation examples](report.md)
+The reported Kaggle public score for `mixtta_local_fixed` is **0.92789**. It classified **2,009 of 2,112 validation images correctly (95.12%)**, 24 more than the fixed-tracking MixTTA-MS baseline. It uses the supplied ResNet-50 and estimates a local class prior from the predictions of the current and preceding batches. [Method, results, and validation examples](report.md)
 
 ## Submission files
 

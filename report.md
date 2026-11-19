@@ -50,6 +50,8 @@ The CSV on this branch comes from `mixtta_local_fixed`. It uses the supplied 20-
 
 LAME follows Boudiaf et al., *Parameter-free Online Test-time Adaptation*, CVPR 2022. [Implementation and code attribution](starter/tta/lame.py) · [Local class prior](starter/tta/mixtta_ms.py)
 
+The reported Kaggle public score for this CSV is **0.92789**, up from 0.91585 for the matched fixed-tracking baseline (+1.20 percentage points). The historical best in the repository was 0.93831.
+
 The official harness generated the 12,288 submission predictions in one online pass. It recorded 25.9 seconds and a peak of 4,150 MiB on an RTX 5090. The submission checker verified the CSV against its run log. The 90-second limit on the TAs’ RTX 3090 remains unverified. [Run log](out/mixtta_local_fixed/test_run_log.json)
 
 ## Q3 Strategies and validation results
