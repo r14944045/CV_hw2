@@ -42,7 +42,7 @@ It would be fine to copy the figure from the referred paper.
 
 ## Q2 Method
 
-Final model: `mixtta_lfsq4` (`starter/tta/mixtta_ms.py`), Kaggle public **0.94319**, val 95.93 %. Its settings were chosen on val, on ImageNet-C corruptions applied to the val images, and on the public leaderboard, as the slide-21 FAQ allows.
+Final model: `mixtta_lfsq4` (`starter/tta/mixtta_ms.py`), Kaggle public **0.94319**, val 95.93 %. Its settings were chosen on val, on ImageNet-C corruptions applied to the val images, and on the public leaderboard, as the slide-21 FAQ allows. On an RTX 3090 the test stream takes 58.0 s with 3.4 GB peak VRAM (limits: 90 s, 10 GB).
 
 - **Model:** the provided ResNet-50 (160 px). Every BN layer becomes a source-mixed BN layer: it normalises with 50 % tracked test statistics and 50 % source statistics. The tracked statistics are an exponential moving average with rate 0.4, one per input size (160 and 224 px).
 - **Trained parameters and loss:** only the BN scale and shift. The loss is the soft cross-entropy between the target of step 3 and the model's output on a randomly flipped and shifted copy at 160 px. Adam, 3 steps per batch, learning rate 1e-3 scaled per ResNet stage: ×4 for the stem, layer1 and layer2, ×1 for layer3, ×0.1 for layer4.

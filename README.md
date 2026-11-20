@@ -26,7 +26,7 @@ python tools/check_submission.py out/$METHOD     # format, run-log hash, time an
 sha256sum out/$METHOD/test_pred.csv              # 48c04860a92e2eae3ff4b3858876df7bd22d365d25709718c1d490ffb0326dec on an RTX 5090
 ```
 
-On a quiet RTX 5090 the test stream takes 24.8 s, with 4.1 GB peak VRAM. The limit is 90 s on an RTX 3090, which has not been measured for this method.
+On an RTX 3090 the test stream takes 58.0 s with 3.4 GB peak VRAM, within the limits of 90 s and 10 GB. On a quiet RTX 5090 it takes 24.8 s.
 
 | Submission | What it adds | Val (%) | Kaggle public |
 |---|---|---:|---:|
