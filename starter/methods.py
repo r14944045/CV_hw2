@@ -46,20 +46,17 @@ METHODS = {
 
     # MixTTA (forward-only) and ablations
     "mixtta": MixTTA,                                  # alpha=0.2, w=0.5, flip + 4 shifts, LAME
-    "mixtta_w7": partial(MixTTA, alpha=0.4, w=0.7),    # more source statistics, faster tracking
     "mixtta_nolame": partial(MixTTA, use_lame=False),  # no LAME
     "mixtta_noaug": partial(MixTTA, flip=False, n_shift=0),  # no flip/shift averaging
-    "mixtta_stats": partial(MixTTA, flip=False, n_shift=0, use_lame=False),  # mixed statistics only
     "mixtta_lag": partial(MixTTA, update_first=False),  # predict before updating the statistics
     # MixTTA with other normalisation statistics (MixBN2d settings; views use the stored statistics)
     "mixtta_srcbn": partial(MixTTA, alpha=0.0),               # frozen source statistics
     "mixtta_tbn": partial(MixTTA, alpha=1.0, w=0.0),          # current test batch only
     "mixtta_rbn": partial(MixTTA, alpha=0.05, w=0.0),         # Robust BN (RoTTA's EMA), no source mix
     "mixtta_w0": partial(MixTTA, w=0.0),                      # mixtta's alpha=0.2 without the source mix
-    # MixTTA + self-training on the LAME-corrected predictions (BN gamma/beta, Adam 1e-3)
-    "mixtta_st": partial(MixTTA, alpha=0.4, w=0.5, lame_feats="mean", lr=1e-3, train_steps=1),
+    # faster tracking + LAME on view-averaged features, then self-training on the LAME output (BN gamma/beta, Adam 1e-3)
+    "mixtta_st_notrain": partial(MixTTA, alpha=0.4, w=0.5, lame_feats="mean"),
     "mixtta_st2": partial(MixTTA, alpha=0.4, w=0.5, lame_feats="mean", lr=1e-3, train_steps=2),
-    "mixtta_st_notrain": partial(MixTTA, alpha=0.4, w=0.5, lame_feats="mean"),  # same, without step 4
     # MixTTA-MS (tta/mixtta_ms.py): MixTTA + self-training run at several input sizes (own statistics per
     # size), fused views, bf16, deterministic cuDNN. Self-training at 160 only. Defaults: sizes (160, 224),
     # flip + 2 shifts, LAME on T=2-softened probabilities, 3 Adam steps per batch.
@@ -68,61 +65,19 @@ METHODS = {
     "mixtta_local_fixed": partial(MixTTAMS, local_context=True),
     # mixtta_local_fixed + per-stage self-training learning rates x(2, 2, 2, 1, 0.25) (stem, layer1-layer4)
     "mixtta_lfs": partial(MixTTAMS, local_context=True, stage_lr=(2, 2, 2, 1, 0.25)),
-    # round 10 final (tools/dev/round10_final.json): mixtta_lfs + adaptive LAME temperature (mean max-probability 0.3)
+    # mixtta_lfs + adaptive LAME temperature (mean max-probability 0.3)
     "mixtta_lfsq": partial(MixTTAMS, local_context=True, stage_lr=(2, 2, 2, 1, 0.25), lame_q=0.3),
-    # round 12 final (tools/dev/round12_final.json): mixtta_lfsq with per-stage rates x(4, 4, 4, 1, 0.1)
+    # FINAL SUBMISSION: mixtta_lfsq with per-stage rates x(4, 4, 4, 1, 0.1)
     "mixtta_lfsq4": partial(MixTTAMS, local_context=True, stage_lr=(4, 4, 4, 1, 0.1), lame_q=0.3),
-    "mixtta_ms3": partial(MixTTAMS, sizes=(160, 192, 224), steps=2),
-    "mixtta_ms3s3": partial(MixTTAMS, sizes=(160, 192, 224)),
-    # + class-prior correction from the counts of predicted labels so far (tta/mixtta_ms.py, step 3b)
-    "mixtta_ms224p": partial(MixTTAMS, prior_lambda=1.0),
-    "mixtta_ms224p2": partial(MixTTAMS, prior_lambda=2.0),
-    # + domain-shift detection (tracker reset) and running-mean tracking within a domain (steps 0, 0b)
-    "mixtta_ms224s": partial(MixTTAMS, shift_thr=10.0, alpha_min=0.1),  # without the class prior
-    "mixtta_ms224sp2": partial(MixTTAMS, shift_thr=10.0, alpha_min=0.1, prior_lambda=2.0),
-    # mixtta_ms224sp2 (Kaggle 0.92724) variants: stronger / faster prior, a third input size, a temporal label prior
-    "mixtta_ms224sp3": partial(MixTTAMS, shift_thr=10.0, alpha_min=0.1, prior_lambda=3.0),
-    "mixtta_ms224sp2f": partial(MixTTAMS, shift_thr=10.0, alpha_min=0.1, prior_lambda=2.0, prior_tau=1000.0),
-    "mixtta_ms3sp2": partial(MixTTAMS, sizes=(160, 192, 224), shift_thr=10.0, alpha_min=0.1, prior_lambda=2.0),
-    "mixtta_ms224sp2t": partial(MixTTAMS, shift_thr=10.0, alpha_min=0.1, prior_lambda=2.0, temporal_mu=0.2),
-    # + in-batch split of the shift batch (step 0c): rows before the changepoint keep the old domain's statistics
-    "mixtta_ms224sp2cp": partial(MixTTAMS, shift_thr=10.0, alpha_min=0.1, prior_lambda=2.0, split_shift=True),
-    # + on the first 2 batches of a domain: self-train first, then predict again with the updated gamma/beta (step 5)
-    "mixtta_ms224sp2cpr": partial(MixTTAMS, shift_thr=10.0, alpha_min=0.1, prior_lambda=2.0, split_shift=True,
-                                  refine_batches=2),
-    # + per-stage self-training learning rates (step 4b): x(stem, layer1, layer2, layer3, layer4)
-    "mixtta_ms224sp2cprl": partial(MixTTAMS, shift_thr=10.0, alpha_min=0.1, prior_lambda=2.0, split_shift=True,
-                                   refine_batches=2, stage_lr=(2, 2, 2, 1, 0.25)),
-    "mixtta_ms224sp2cprl3": partial(MixTTAMS, shift_thr=10.0, alpha_min=0.1, prior_lambda=2.0, split_shift=True,
-                                    refine_batches=2, stage_lr=(3, 3, 3, 1, 0.1)),
-    # mixtta_ms224sp2cprl3 with the shift threshold chosen on val only (tools/dev/threshold_val.py): 8.7
-    "mixtta_ms224sp2cprl3v": partial(MixTTAMS, shift_thr=8.7, alpha_min=0.1, prior_lambda=2.0, split_shift=True,
-                                     refine_batches=2, stage_lr=(3, 3, 3, 1, 0.1)),
-    # floor of the val-only re-pick (tools/dev/repick.py): stage-1 pick so far (2 steps, LAME T 1), every later
-    # stage at its simplest option (no shift reset, split, second pass, class prior, per-stage lr or adaptive T)
-    "mixtta_repick_floor": partial(MixTTAMS, sizes=(160, 224), steps=2, lame_T=1.0),
-    # val-only re-pick after stage 5 (stages 6-7, per-stage lr and adaptive T, at their simplest): 3 steps, LAME T 2,
-    # shift reset with rate floor 0.2, val-rule threshold 9.0, in-batch split; no second pass, no class prior
+
+    # side branch (report Q3): val-only re-pick with shift reset, running-mean tracking and in-batch split
+    # after stage 5: 3 steps, LAME T 2, rate floor 0.2, val-rule threshold 9.0, in-batch split
     "mixtta_repick_s5": _repick_s5,
-    # final val-only re-pick (tools/dev/repick_final.json): stage 5 + per-stage self-training learning rates
-    # x(2, 2, 2, 1, 0.25) for stem, layer1-layer4 (stage 6); no adaptive temperature (stage 7)
+    # + per-stage self-training learning rates x(2, 2, 2, 1, 0.25) (stage 6)
     "mixtta_repick": partial(MixTTAMS, sizes=(160, 224), steps=3, lame_T=2.0, alpha_min=0.2, shift_thr=9.0,
                              split_shift=True, stage_lr=(2, 2, 2, 1, 0.25)),
-    # round 8 final (tools/dev/round8_final.json): mixtta_repick + the local class prior, chosen on the ImageNet-C
-    # suite added to val (tools/dev/suite.py, round8.py)
+    # side branch + the local class prior: both collapsed on the public leaderboard (kept for the report's table)
+    "mixtta_local": partial(_repick_s5, local_context=True),
     "mixtta_r8": partial(MixTTAMS, sizes=(160, 224), steps=3, lame_T=2.0, alpha_min=0.2, shift_thr=9.0,
                          split_shift=True, stage_lr=(2, 2, 2, 1, 0.25), local_context=True),
-    # Stage 5 with a class prior estimated from nearby predictions.
-    "mixtta_local": partial(_repick_s5, local_context=True),
-    # + adaptive LAME temperature (step 3a): per batch, T such that the mean max-probability is 0.3
-    "mixtta_ms224sp2cprl3q3": partial(MixTTAMS, shift_thr=10.0, alpha_min=0.1, prior_lambda=2.0, split_shift=True,
-                                      refine_batches=2, stage_lr=(3, 3, 3, 1, 0.1), lame_q=0.3),
-    # domain-shift reset only: rate 1 on the shift batch, 1/2 on the next, then the usual 0.4
-    "mixtta_ms224r": partial(MixTTAMS, shift_thr=10.0, alpha_min=0.4),
-    "mixtta_ms224rp2": partial(MixTTAMS, shift_thr=10.0, alpha_min=0.4, prior_lambda=2.0),
-    # ablations
-    "mixtta_ms224_t1": partial(MixTTAMS, lame_T=1.0),  # mixtta_ms224 without the LAME temperature
-    "mixtta_ms": partial(MixTTAMS, sizes=(160, 192), n_shift=4, lame_T=1.0, steps=2),  # first multi-scale version
-    "mixtta_ms_notrain": partial(MixTTAMS, sizes=(160, 192), n_shift=4, lame_T=1.0, steps=0),
-    "mixtta_bf16": partial(MixTTAMS, sizes=(160,), n_shift=4, lame_T=1.0, steps=2),  # = mixtta_st2 in bf16
 }

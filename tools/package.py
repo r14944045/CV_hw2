@@ -30,48 +30,32 @@ def reproduce_command(config):
             f"--data ../data --ckpt ../source_resnet50_160.pth --out ../out {extra}").rstrip()
 
 
+PINNED = ("torch==2.13.0 torchvision==0.28.0 numpy==2.2.6 pandas==2.3.3 pillow==12.2.0 "
+          "--extra-index-url https://download.pytorch.org/whl/cu129")
+
+
 def readme(student_id, log, val_log):
     cmd = reproduce_command(log["config"])
-    val = f"| val accuracy | {val_log['acc']:.4f} |\n" if val_log and "acc" in val_log else ""
-    return f"""# CVPDL HW2 ({student_id}): Test-Time Adaptation
-
-## Reproduce `test_pred.csv`
-
-Place the dataset and the source checkpoint next to `code/`:
-
-```
-./data/                       (val/, test/ from Kaggle)
-./source_resnet50_160.pth
-./code/                       (this submission's code)
-```
-
-Then run (one online pass through the official harness):
+    return f"""# CVPDL HW2 ({student_id}): reproduce `test_pred.csv`
 
 ```bash
+# environment: Python 3.10, CUDA GPU with bf16 (Ampere or newer); the versions used for the submitted run
+pip install {PINNED}
+
+# inputs next to code/: the Kaggle dataset in ./data (val/, test/) and ./source_resnet50_160.pth
+
+# one online pass through the official harness -> out/test_pred.csv, out/test_run_log.json
 {cmd}
+
+# expected: sha256sum ../out/test_pred.csv = {log['pred_sha256']} ({log['gpu']})
 ```
-
-Output: `out/test_pred.csv` and `out/test_run_log.json`.
-
-## Environment & submitted run
-
-| item | value |
-|---|---|
-| method | `{log['config']['method']}` (see `code/methods.py`) |
-| seed | {log['config'].get('seed')} |
-{val}| test run time | {log['seconds']} s |
-| peak VRAM | {log['peak_vram_mib']:.0f} MiB |
-| GPU / torch / python | {log['gpu']} / {log['torch']} / {log['python']} |
-| pred sha256 | `{log['pred_sha256']}` |
-
-Dependencies: `torch`, `torchvision`, `numpy`, `pandas`, `pillow`.
 """
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("run_dir", help="directory with test_pred.csv / test_run_log.json (e.g. out/rotta)")
-    ap.add_argument("--id", default="R15922154", help="student id")
+    ap.add_argument("--id", default="R14944045", help="student id")
     ap.add_argument("--report", default=None, help="report pdf (default: hw2_report_<id>.pdf in project root)")
     ap.add_argument("--draft", action="store_true", help="allow building without the report pdf")
     ap.add_argument("--out", default=None, help="zip path (default: hw2_<id>.zip in project root)")
