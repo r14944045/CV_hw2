@@ -1,0 +1,12 @@
+== round 12 base mixtta_lfsq {"lame_T": 2.0, "lame_q": 0.3, "local_context": true, "sizes": [160, 224], "stage_lr": [2, 2, 2, 1, 0.25], "steps": 3}
+   base         S_tune 75.37 (75.25/75.50) S_conf 72.17 V 94.19 L 95.4->98.5 share 0.053 | margin m = 0.30
+   slr3         S_tune 76.49 (75.88/77.11) S_conf 72.46 V 94.39 L 95.6->98.7 share 0.054 | dS_tune +1.12 dS_conf +0.29 dV +0.20  ADOPT
+   slr2l3       S_tune 74.39 (73.28/75.49) S_conf 70.26 V 94.21 L 95.5->98.7 share 0.053 | dS_tune -0.98 dS_conf -1.91 dV +0.02
+   slr4         S_tune 76.95 (75.87/78.03) S_conf 72.55 V 94.49 L 95.8->98.8 share 0.053 | dS_tune +1.57 dS_conf +0.38 dV +0.31  ADOPT
+   q02          S_tune 75.26 (74.96/75.55) S_conf 71.86 V 94.34 L 95.4->98.5 share 0.054 | dS_tune -0.12 dS_conf -0.31 dV +0.15
+   q04          S_tune 75.29 (75.06/75.53) S_conf 71.93 V 94.05 L 95.4->98.6 share 0.053 | dS_tune -0.08 dS_conf -0.24 dV -0.14
+   knn3         S_tune 75.00 (74.85/75.15) S_conf 71.49 V 93.47 L 94.9->97.9 share 0.052 | dS_tune -0.37 dS_conf -0.68 dV -0.72
+   knn8         S_tune 69.54 (69.22/69.86) S_conf 66.49 V 92.83 L 94.3->97.9 share 0.056 | dS_tune -5.83 dS_conf -5.68 dV -1.35
+== combine + slr4                S_tune 76.95 (75.87/78.03) S_conf 72.55 V 94.49 L 95.8->98.8 share 0.053  KEEP
+== combine + slr3                S_tune 76.49 (75.88/77.11) S_conf 72.46 V 94.39 L 95.6->98.7 share 0.054  drop
+FINAL {"lame_T": 2.0, "lame_q": 0.3, "local_context": true, "sizes": [160, 224], "stage_lr": [4, 4, 4, 1, 0.1], "steps": 3}

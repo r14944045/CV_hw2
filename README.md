@@ -13,27 +13,32 @@ pip install -r requirements.txt --extra-index-url https://download.pytorch.org/w
 
 Unzip the dataset into `data/` (from `ntu-cvpdl-2026-hw-2.zip`) and put `source_resnet50_160.pth` in the repo root.
 
-### Generate the submitted file (`mixtta_repick`, Kaggle public 0.92675)
+### Generate the final file (`mixtta_lfsq4`, Kaggle public 0.94319)
 
-Every setting of `mixtta_repick` was chosen on val alone by [tools/dev/repick.py](tools/dev/repick.py); see [report.md](report.md#val-only-re-pick-all-evaluations).
+`mixtta_lfsq4` is fixed-tracking `mixtta_ms224` with the local class prior, the adaptive LAME temperature and per-stage learning rates ×(4, 4, 4, 1, 0.1). Its settings were chosen on val, on ImageNet-C corruptions applied to val, and on the public leaderboard; see [report.md](report.md) (Q2) and [docs/experiments_full.md](docs/experiments_full.md).
 
 ```bash
-METHOD=mixtta_repick
+METHOD=mixtta_lfsq4
 cd starter
 python run.py --method $METHOD --split test --data ../data --ckpt ../source_resnet50_160.pth --out ../out/$METHOD
 cd ..
 python tools/check_submission.py out/$METHOD     # format, run-log hash, time and VRAM checks
-sha256sum out/$METHOD/test_pred.csv              # a6ab4f7074a81a692cef0af7dcc94e5dcaa63cb9b01a1f7d90c747b6e6b58e23 on an RTX 5090
+sha256sum out/$METHOD/test_pred.csv              # 48c04860a92e2eae3ff4b3858876df7bd22d365d25709718c1d490ffb0326dec on an RTX 5090
 ```
 
-On a quiet RTX 5090 the test stream takes 25.1 s, with 4.1 GB peak VRAM. The limit is 90 s on an RTX 3090, which has not been measured.
+On a quiet RTX 5090 the test stream takes 24.8 s, with 4.1 GB peak VRAM. The limit is 90 s on an RTX 3090, which has not been measured for this method.
 
-| Val-only submission | Re-pick stages | Val (%) | Kaggle public |
+| Submission | What it adds | Val (%) | Kaggle public |
 |---|---|---:|---:|
-| `mixtta_repick` (submitted) | all 7 | 95.08 | **0.92675** |
-| `mixtta_repick_s5` | 1–5 (no per-stage learning rates) | 94.74 | 0.92220 |
-| `mixtta_ms224` | 1 | 93.99 | 0.91585 |
+| `mixtta_lfsq4` (final) | per-stage rates ×(4, 4, 4, 1, 0.1) instead | 95.93 | **0.94319** |
+| `mixtta_lfsq` | + adaptive LAME temperature | 95.27 | 0.94042 |
+| `mixtta_lfs` | + per-stage rates ×(2, 2, 2, 1, 0.25) | 95.31 | 0.93815 |
+| `mixtta_local_fixed` | `mixtta_ms224` + local class prior | 95.12 | 0.92789 |
+| `mixtta_repick` | val-only re-pick, all 7 stages | 95.08 | 0.92675 |
+| `mixtta_repick_s5` | re-pick stages 1–5 | 94.74 | 0.92220 |
+| `mixtta_ms224` | re-pick stage 1 | 93.99 | 0.91585 |
 | `mixtta_repick_floor` | interim: 2 steps, T = 1 | 94.03 | 0.91227 |
+| `mixtta_r8` / `mixtta_local` | local class prior with shift reset: collapsed | 96.69 / 96.07 | 0.82682 / 0.68554 |
 
 ### Reproduce the validation result
 
@@ -43,7 +48,7 @@ On a quiet RTX 5090 the test stream takes 25.1 s, with 4.1 GB peak VRAM. The lim
 python starter/run.py --method mixtta_local_fixed --split val --data data --ckpt source_resnet50_160.pth --out out/mixtta_local_fixed
 ```
 
-The predictions and run log are in [out/mixtta_local_fixed](out/mixtta_local_fixed). The earlier `mixtta_local` experiment reached **96.07%** with the stage-5 shift detector. Its design history matters under the slide 21 FAQ. [Experiment details and provenance](report.md#local-class-prior-validation-experiment)
+The predictions and run log are in [out/mixtta_local_fixed](out/mixtta_local_fixed). The earlier `mixtta_local` experiment reached **96.07%** with the stage-5 shift detector. Its design history matters under the slide 21 FAQ. [Experiment details and provenance](docs/local_prior_experiment.md)
 
 ### Generate the submission file for the earlier preset
 

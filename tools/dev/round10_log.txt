@@ -1,0 +1,8 @@
+== round 10 base mixtta_lfs {"lame_T": 2.0, "local_context": true, "sizes": [160, 224], "stage_lr": [2, 2, 2, 1, 0.25], "steps": 3}
+   base         S_tune 74.70 (74.74/74.67) S_conf 70.41 V 94.40 L 95.2->98.5 share 0.053 | margin m = 0.30
+   dot          S_tune 74.89 (74.95/74.82) S_conf 70.52 V 94.39 L 95.2->98.5 share 0.053 | dS_tune +0.18 dS_conf +0.11 dV -0.01
+   lameq3       S_tune 75.37 (75.25/75.50) S_conf 72.17 V 94.19 L 95.4->98.5 share 0.053 | dS_tune +0.67 dS_conf +1.76 dV -0.21  ADOPT
+   iabn         S_tune 64.62 (65.47/63.76) S_conf 67.98 V 90.53 L 91.1->96.2 share 0.055 | dS_tune -10.09 dS_conf -2.43 dV -3.87
+   steps4       S_tune 75.47 (75.24/75.70) S_conf 69.89 V 94.68 L 95.5->98.6 share 0.053 | dS_tune +0.77 dS_conf -0.51 dV +0.28
+== combine + lameq3                S_tune 75.37 (75.25/75.50) S_conf 72.17 V 94.19 L 95.4->98.5 share 0.053  KEEP
+FINAL {"lame_T": 2.0, "lame_q": 0.3, "local_context": true, "sizes": [160, 224], "stage_lr": [2, 2, 2, 1, 0.25], "steps": 3}

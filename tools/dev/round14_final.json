@@ -1,0 +1,17 @@
+{
+ "lame_T": 2.0,
+ "lame_q": 0.3,
+ "local_context": true,
+ "sizes": [
+  160,
+  224
+ ],
+ "stage_lr": [
+  4,
+  4,
+  4,
+  1,
+  0.1
+ ],
+ "steps": 3
+}

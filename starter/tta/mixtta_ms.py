@@ -62,6 +62,93 @@ from .lame import lame
 from .mixbn import MultiMixBN2d, configure_multi_mix_norm
 from .mixtta import random_shift
 
+# ---------------------------------------------------------------- ptta "caug": corruption augmentation of the
+# self-training copy (no labels). Six ImageNet-C corruptions (Hendrycks & Dietterich, ICLR 2019) at severity 3: the
+# even positions of the published list (gaussian noise, impulse noise, glass blur, zoom blur, brightness, elastic
+# transform; jpeg left out as it has no fast GPU version), re-implemented in torch. Parameters as in make_imagenet_c.py
+# (github.com/hendrycks/robustness), scaled to the image size where the original uses pixel units.
+_MEAN = torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1)
+_STD = torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1)
+
+
+def _gauss_blur(x, sigma):
+    r = int(math.ceil(3 * sigma))
+    t = torch.arange(-r, r + 1, device=x.device, dtype=x.dtype)
+    k = torch.exp(-t ** 2 / (2 * sigma ** 2))
+    k = k / k.sum()
+    C = x.size(1)
+    x = F.conv2d(F.pad(x, (r, r, 0, 0), mode="reflect"), k.view(1, 1, 1, -1).repeat(C, 1, 1, 1), groups=C)
+    return F.conv2d(F.pad(x, (0, 0, r, r), mode="reflect"), k.view(1, 1, -1, 1).repeat(C, 1, 1, 1), groups=C)
+
+
+def _c_gaussian_noise(x):
+    return x + 0.18 * torch.randn_like(x)
+
+
+def _c_impulse_noise(x):
+    m = torch.rand_like(x)
+    return torch.where(m < 0.045, torch.zeros_like(x), torch.where(m < 0.09, torch.ones_like(x), x))
+
+
+def _c_glass_blur(x):  # sigma 1, |displacement| <= 2, 3 iterations (random displacement instead of sequential swaps)
+    x = _gauss_blur(x, 1.0)
+    B, C, H, W = x.shape
+    yy, xx = torch.meshgrid(torch.arange(H, device=x.device), torch.arange(W, device=x.device), indexing="ij")
+    for _ in range(3):
+        iy = (yy + torch.randint(-2, 3, (B, H, W), device=x.device)).clamp(0, H - 1)
+        ix = (xx + torch.randint(-2, 3, (B, H, W), device=x.device)).clamp(0, W - 1)
+        idx = (iy * W + ix).view(B, 1, H * W).expand(B, C, H * W)
+        x = x.reshape(B, C, H * W).gather(2, idx).view(B, C, H, W)
+    return _gauss_blur(x, 1.0)
+
+
+def _c_zoom_blur(x):  # zoom factors 1.00, 1.02, ..., 1.20
+    H = x.size(-1)
+    out = torch.zeros_like(x)
+    zs = [1 + 0.02 * i for i in range(11)]
+    for z in zs:
+        ch = int(math.ceil(H / z))
+        t = (H - ch) // 2
+        out += F.interpolate(x[..., t:t + ch, t:t + ch], size=(H, H), mode="bilinear", align_corners=False)
+    return (x + out) / (len(zs) + 1)
+
+
+def _c_brightness(x):  # HSV value + 0.3 (hue and saturation kept: RGB scales with V)
+    v = x.max(1, keepdim=True).values
+    nv = (v + 0.3).clamp(max=1)
+    return torch.where(v > 0, x * nv / v.clamp_min(1e-6), nv.expand_as(x))
+
+
+def _c_elastic(x):  # random affine (3 points moved by up to `aff` px) + smoothed displacement field
+    B, C, H, W = x.shape
+    s = H / 224
+    alpha, sigma, aff = 244 * .05 * s, 244 * .01 * s, 244 * .02 * s
+    c, q = H // 2, min(H, W) // 3
+    p1 = torch.tensor([[c + q, c + q], [c + q, c - q], [c - q, c - q]], dtype=torch.float32)
+    p2 = p1 + (torch.rand(B, 3, 2) * 2 - 1) * aff  # tiny 3x3 solves: on the CPU
+    A = torch.cat([p2, torch.ones(B, 3, 1)], 2)  # inverse map: output point -> input point
+    M = torch.linalg.solve(A, p1.expand(B, 3, 2)).to(x.device)  # (B, 3, 2)
+    yy, xx = torch.meshgrid(torch.arange(H, device=x.device, dtype=torch.float32),
+                            torch.arange(W, device=x.device, dtype=torch.float32), indexing="ij")
+    q_ = torch.stack([yy, xx, torch.ones_like(yy)], -1).view(1, H * W, 3)
+    src = (q_ @ M).view(B, H, W, 2)  # (row, col)
+    d = _gauss_blur(torch.rand(B, 2, H, W, device=x.device) * 2 - 1, sigma) * alpha
+    src = src + d.permute(0, 2, 3, 1)
+    grid = torch.stack([src[..., 1] / (W - 1) * 2 - 1, src[..., 0] / (H - 1) * 2 - 1], -1)
+    return F.grid_sample(x, grid, mode="bilinear", padding_mode="reflection", align_corners=True)
+
+
+_CAUG = [_c_gaussian_noise, _c_impulse_noise, _c_glass_blur, _c_zoom_blur, _c_brightness, _c_elastic]
+
+
+def corrupt_augment(xv):
+    """The normalised batch gets one corruption drawn at random from _CAUG (one per training step, so the six kinds
+    alternate across steps and batches); returns a normalised batch."""
+    mean, std = _MEAN.to(xv.device), _STD.to(xv.device)
+    x01 = (xv.float() * std + mean).clamp(0, 1)
+    fn = _CAUG[int(torch.randint(0, len(_CAUG), (1,)))]  # CPU draw: no GPU synchronisation
+    return ((fn(x01).clamp(0, 1) - mean) / std).to(xv.dtype)
+
 
 class MixTTAMS:
     def __init__(self, model, alpha=0.4, w=0.5, sizes=(160, 224), flip=True, n_shift=2, knn=5, lame_T=2.0,
@@ -69,7 +156,7 @@ class MixTTAMS:
                  shift_thr=0.0, alpha_min=None, extra_train=(), extra_lr=1e-4, temporal_mu=0.0, temporal_eps=0.1,
                  split_shift=False, split_min=4, split_train="new", refine_batches=0,
                  st_weight=None, st_pow=1.0, st_ent=None, ema_pred=0.0, refine_steps=None,
-                 opt_reset=False, stage_lr=None, lame_q=None):
+                 opt_reset=False, stage_lr=None, lame_q=None, local_context=False, ptta=None):
         setup_cuda()
         if deterministic:  # fixed cuDNN algorithms: reruns give the same predictions (slower)
             torch.backends.cudnn.benchmark = False
@@ -92,6 +179,23 @@ class MixTTAMS:
         self.refine_steps = refine_steps  # self-training steps on the second-pass batches (None: steps)
         self.opt_reset = opt_reset  # clear Adam's moment estimates at a detected domain shift
         self.temporal_mu, self.temporal_eps, self.h_prev = temporal_mu, temporal_eps, None
+        self.local_context = local_context
+        self.previous_graph_probs = None
+        # ptta: published practical-TTA components on top of self-training (default off, see _ptta_weights):
+        #   eata (Niu et al., ICML 2022), dot (DELTA, Zhao et al., ICLR 2023), roid_w / roid_we / roid_prior (ROID,
+        #   Marsden et al., WACV 2024), sar_reset (SAR model recovery, Niu et al., ICLR 2023)
+        self.ptta = dict(ptta or {})
+        self._fused_prob, self._eata_ema, self._roid_ema, self._dot_q, self._sar_ema = None, None, None, None, None
+        self.sar_resets = 0
+        # iabn: NOTE's instance-aware BN on every layer (Gong et al., NeurIPS 2022), threshold k (NOTE default 3)
+        for l in self.layers:
+            l.iabn_k = float(self.ptta.get("iabn", 0.0))
+            if self.ptta.get("tribe"):  # TRIBE's balanced BN statistics (Su et al., AAAI 2024), momentum = value
+                l.enable_tribe(float(self.ptta["tribe"]), self.model.fc.out_features, len(self.sizes))
+            if self.ptta.get("unmix"):  # UnMix-TNS (Tomar et al., ICLR 2024): K = value components, momentum 0.1
+                l.enable_unmix(int(self.ptta["unmix"]), 0.1, len(self.sizes))
+        # t3a: T3A prototype classifier on the fused features (Iwasawa & Matsuo, NeurIPS 2021); value = filter_K
+        self._t3a = None
         self.amp = torch.autocast("cuda", dtype=torch.bfloat16, enabled=amp)
         self._feats = None
         self.model.fc.register_forward_hook(lambda m, inp, out: setattr(self, "_feats", inp[0].detach()))
@@ -121,6 +225,10 @@ class MixTTAMS:
             groups += [dict(params=extra, lr=extra_lr)] if extra else []
             self.opt = torch.optim.Adam(groups, lr=lr)
             self._params = params
+            # source copies of the trained parameters for ROID weight ensembling and SAR model recovery
+            self._src_params = ([p.detach().clone() for p in params]
+                                if self.ptta.get("roid_we") or self.ptta.get("sar_reset") or self.ptta.get("restore")
+                                else None)
             self._ema = [p.detach().clone() for p in params] if ema_pred else None
             self._live = None
 
@@ -193,6 +301,12 @@ class MixTTAMS:
                 self.dist_hist, self.k_dom, alpha = [], 0, 1.0
                 if self.opt_reset and self.opt is not None:
                     self.opt.state.clear()
+                if self.ptta.get("restore") and self.opt is not None:
+                    # restore the trained parameters to source at a detected shift (Niloy et al., WACV 2024)
+                    with torch.no_grad():
+                        for p, s in zip(self._params, self._src_params):
+                            p.copy_(s)
+                    self.opt.state.clear()
                 self.n_dom = 0
                 if self.split_shift:
                     self.j_old = self._changepoint()
@@ -257,12 +371,19 @@ class MixTTAMS:
         self.j_old = 0
         alpha = self._tracking_rate(x)
         self._use_ema(True)
+        if self.ptta.get("tribe"):  # pseudo-labels for the balanced statistics: eval forward with the current statistics
+            lab = self._tribe_labels(x)
+            for l in self.layers:
+                l.label = lab
         if self.j_old:
             out = [self._scale_forward_split(self._resize(x, s), k, self.j_old) for k, s in enumerate(self.sizes)]
         else:
             out = [self._scale_forward(self._resize(x, s), k, alpha) for k, s in enumerate(self.sizes)]
-        z = self._predict(out)
+        if self.ptta.get("tribe"):
+            for l in self.layers:
+                l.label = None
         refine = self.refine_batches and not self.j_old and self.k_dom <= self.refine_batches and self.opt is not None
+        z = self._predict(out, remember=not refine)
         if refine:  # 5: first batches of a domain: train on this batch, then predict it again with the new gamma/beta
             self._use_ema(False)
             self.self_train(x, z, steps=self.refine_steps)
@@ -270,7 +391,7 @@ class MixTTAMS:
             self._use_ema(True)
             z = self._predict([self._eval_views(k, x.size(0)) for k in range(len(self.sizes))])
         self._use_ema(False)
-        pred = z.argmax(1)
+        pred = (self._roid_prior(z) if self.ptta.get("roid_prior") else z).argmax(1)
         self.counts += torch.bincount(pred, minlength=z.size(1)).float()
         self.n_seen += pred.numel()
         if self.opt is not None and not refine:
@@ -300,10 +421,13 @@ class MixTTAMS:
                 hi = T
         return torch.softmax(logp / (0.5 * (lo + hi)), 1)
 
-    def _predict(self, out):
-        """Steps 2-3: fuse scales, class prior, temperature, LAME. Returns the LAME output z."""
+    def _predict(self, out, *, remember=True):
+        """Fuse scales and compute soft targets for prediction and self-training."""
         prob = torch.stack([p for p, _ in out]).mean(0)
         feats = torch.stack([f for _, f in out]).mean(0)
+        self._fused_prob = prob  # the model's own prediction (views and sizes averaged), used by ptta
+        if self.ptta.get("t3a"):  # T3A replaces the linear classifier's output with its prototype classifier
+            prob = self._t3a_prob(feats, prob, remember=remember)
         C = prob.size(1)
         if self.counts is None:
             self.counts = torch.zeros(C, device=prob.device)
@@ -311,6 +435,7 @@ class MixTTAMS:
             pi = (self.counts + self.prior_tau / C) / (self.n_seen + self.prior_tau)
             prob = prob * (C * pi).pow(-self.prior_lambda)
             prob = prob / prob.sum(1, keepdim=True)
+        image_prob = prob
         if self.lame_q is not None:
             prob = self._temper_to(prob, self.lame_q)
         elif self.lame_T != 1.0:
@@ -320,7 +445,24 @@ class MixTTAMS:
             prob = prob / prob.sum(1, keepdim=True)
         z = lame(prob, feats, self.knn)
         self.h_prev = z.mean(0)
+        if self.local_context:
+            target = self._local_targets(image_prob, z)
+            if remember:
+                self.previous_graph_probs = z.detach()
+            return target
         return z
+
+    def _local_targets(self, image_prob, graph_prob):
+        """Estimate each image's class prior from other rows in this batch and the preceding batch."""
+        history = self.previous_graph_probs
+        evidence = graph_prob if history is None else torch.cat([history, graph_prob])
+        positions = torch.arange(len(evidence), device=evidence.device)
+        distance = (positions[-len(graph_prob):, None] - positions[None, :]).abs()
+        weights = torch.exp(-distance / 12.0).masked_fill_(distance == 0, 0)
+        counts = weights @ evidence + 0.2  # pseudocount per class, including when no neighbours exist
+        # The prior's row-wise normalizer cancels in softmax. Sharpen the combined target for self-training.
+        logits = (2 * image_prob.clamp_min(1e-12).log() + graph_prob.clamp_min(1e-12).log()) / 3
+        return (2 * (logits + 0.5 * counts.log())).softmax(1)
 
     def _st_weights(self, t):
         """Per-image weights of the self-training loss (None: uniform). st_weight="conf": (max_c t)^st_pow.
@@ -340,13 +482,130 @@ class MixTTAMS:
         self._set_tracker(k)
         xs = self._resize(x, self.sizes[k])
         m = self.model.eval()
+        pw, denom = self._ptta_weights(rows) if self.ptta else (None, None)
         for _ in range(self.steps if steps is None else steps):
             xv = random_shift(xs)[rows:]
+            if self.ptta.get("caug"):  # corruption augmentation of the training copy (no labels)
+                xv = corrupt_augment(xv)
             with self.amp:
                 logits = m(xv.contiguous(memory_format=torch.channels_last))
             ce = -(target[rows:] * logits.float().log_softmax(1)).sum(1)
             w = self._st_weights(target[rows:])
             loss = ce.mean() if w is None else (w * ce).sum() / w.sum().clamp_min(1e-6)
+            if pw is not None:
+                loss = ((pw if w is None else pw * w) * ce).sum() / denom
             self.opt.zero_grad(set_to_none=True)
             loss.backward()
             self.opt.step()
+            if self.ptta.get("roid_we"):  # ROID weight ensembling after every optimizer step
+                with torch.no_grad():
+                    for p, s in zip(self._params, self._src_params):
+                        p.mul_(self.ptta["roid_we"]).add_(s, alpha=1 - self.ptta["roid_we"])
+        if self.ptta:
+            self._ptta_after(logits.detach().float(), pw, rows)
+
+    # ------------------------------------------------------------------ published practical-TTA components (ptta)
+    def _ptta_weights(self, rows):
+        """Per-image weights for the self-training loss from the model's fused prediction p, and the denominator.
+        eata: keep H(p) < 0.4 ln C and |cos(ema, p)| < 0.05, weight exp(E0 - H) (EATA, eata.py; e_margin, d_margin)
+        roid_w: certainty x diversity weights exp(div * cert / (1/3)), samples with below-mean diversity dropped (ROID)
+        dot: class weights 1 / q_hat of the predicted class, renormalised to mean 1 (DELTA's DOT)"""
+        p = self._fused_prob[rows:].float()
+        n, C = p.shape
+        H = -(p * torch.log(p + 1e-10)).sum(1)
+        w = torch.ones(n, device=p.device)
+        denom = float(n)
+        if self.ptta.get("eata"):
+            e0 = 0.4 * math.log(C)
+            keep = H < e0
+            if self._eata_ema is not None:
+                keep = keep & (F.cosine_similarity(self._eata_ema[None], p, dim=1).abs() < 0.05)
+            if keep.any():
+                kp = p[keep].mean(0)
+                self._eata_ema = kp if self._eata_ema is None else 0.9 * self._eata_ema + 0.1 * kp
+            w = w * keep.float() * torch.exp(e0 - H)
+            denom = max(1.0, float(keep.sum()))
+        if self.ptta.get("roid_w"):
+            ema = self._roid_ema if self._roid_ema is not None else torch.full((C,), 1.0 / C, device=p.device)
+            div = 1 - F.cosine_similarity(ema[None], p, dim=1)
+            div = (div - div.min()) / (div.max() - div.min() + 1e-8)
+            cert = -H
+            cert = (cert - cert.min()) / (cert.max() - cert.min() + 1e-8)
+            rw = torch.exp(div * cert / (1 / 3))
+            rw[div < div.mean()] = 0
+            w = w * rw
+            self._roid_ema = 0.9 * ema + 0.1 * p.mean(0)
+        if self.ptta.get("dot"):
+            if self._dot_q is None:
+                self._dot_q = torch.full((C,), 1.0 / C, device=p.device)
+            cw = 1.0 / self._dot_q
+            cw = cw / cw.sum()
+            sw = cw[p.argmax(1)]
+            w = w * (sw / sw.sum() * n)
+        return w, denom
+
+    def _ptta_after(self, logits, pw, rows):
+        """After the batch's update: DELTA's q_hat update and SAR's model recovery."""
+        if self.ptta.get("dot"):
+            self._dot_q = self.ptta["dot"] * self._dot_q + (1 - self.ptta["dot"]) * self._fused_prob[rows:].float().mean(0)
+        if self.ptta.get("sar_reset"):  # SAR: EMA (0.9) of the trained samples' entropy; reset to source below 0.2
+            p = logits.softmax(1)
+            H = -(p * torch.log(p + 1e-10)).sum(1)
+            if pw is not None and self.ptta.get("eata") and (pw > 0).any():
+                H = H[pw > 0]
+            e = float(H.mean())
+            self._sar_ema = e if self._sar_ema is None else 0.9 * self._sar_ema + 0.1 * e
+            if self._sar_ema < 0.2:
+                with torch.no_grad():
+                    for p_, s in zip(self._params, self._src_params):
+                        p_.copy_(s)
+                self.opt.state.clear()
+                self._sar_ema = None
+                self.sar_resets += 1
+
+    @torch.no_grad()
+    def _tribe_labels(self, x):
+        """Argmax of the softmax averaged over the input sizes, from eval-mode forwards (statistics not updated)."""
+        prob = 0
+        for k, s in enumerate(self.sizes):
+            self._set_tracker(k)
+            with self.amp:
+                logits = self.model.eval()(self._resize(x, s).contiguous(memory_format=torch.channels_last))
+            prob = prob + logits.float().softmax(1)
+        return prob.argmax(1)
+
+    @torch.no_grad()
+    def _t3a_prob(self, feats, prob, remember=True):
+        """T3A (matsuolab/T3A, adapt_algorithms.py): supports start from the classifier weights; each batch adds its
+        features with one-hot predicted labels and entropies; per class only the filter_K lowest-entropy supports are
+        kept; logits = z @ normalize(normalize(supports).T @ labels). Supports restart at a detected domain shift."""
+        K = int(self.ptta["t3a"])
+        fc = self.model.fc
+        if self._t3a is None or (self.k_dom == 1 and self.shifts):
+            w = fc.weight.detach().float()
+            p0 = (w @ w.T + fc.bias.detach().float()).softmax(1)
+            self._t3a = [w, F.one_hot(p0.argmax(1), w.size(0)).float(), -(p0 * torch.log(p0 + 1e-10)).sum(1)]
+        S, L, E = self._t3a
+        yh = prob.argmax(1)
+        ent = -(prob * torch.log(prob + 1e-10)).sum(1)
+        S, L, E = torch.cat([S, feats.float()]), torch.cat([L, F.one_hot(yh, L.size(1)).float()]), torch.cat([E, ent])
+        keep = []
+        lab = L.argmax(1)
+        for c in range(L.size(1)):
+            idx = torch.nonzero(lab == c).flatten()
+            keep.append(idx[E[idx].argsort()[:K]])
+        keep = torch.cat(keep)
+        S, L, E = S[keep], L[keep], E[keep]
+        if remember:
+            self._t3a = [S, L, E]
+        weights = F.normalize(S, dim=1).T @ L
+        logits = feats.float() @ F.normalize(weights, dim=0)
+        return logits.softmax(1)
+
+    @staticmethod
+    def _roid_prior(z):
+        """ROID's prior correction (roid.py), applied to this method's output probabilities: multiply by the batch's
+        smoothed mean prediction."""
+        prior = z.mean(0)
+        smooth = max(1 / z.size(0), 1 / z.size(1)) / prior.max()
+        return z * ((prior + smooth) / (1 + smooth * z.size(1)))

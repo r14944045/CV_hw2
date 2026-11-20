@@ -1,0 +1,8 @@
+== round 11 base mixtta_lfsq {"lame_T": 2.0, "lame_q": 0.3, "local_context": true, "sizes": [160, 224], "stage_lr": [2, 2, 2, 1, 0.25], "steps": 3}
+   base         S_tune 75.37 (75.25/75.50) S_conf 72.17 V 94.19 L 95.4->98.5 share 0.053 | margin m = 0.30
+   shift3       S_tune 75.43 (75.75/75.12) S_conf 71.92 V 94.31 L 95.2->98.4 share 0.053 | dS_tune +0.06 dS_conf -0.25 dV +0.12
+   alpha02      S_tune 68.23 (68.14/68.33) S_conf 65.82 V 93.68 L 94.2->98.2 share 0.054 | dS_tune -7.14 dS_conf -6.35 dV -0.50
+   alpha06      S_tune 75.67 (75.22/76.11) S_conf 72.89 V 93.89 L 95.2->98.4 share 0.052 | dS_tune +0.29 dS_conf +0.72 dV -0.29
+   w03          S_tune 75.70 (75.64/75.75) S_conf 73.31 V 93.45 L 94.8->98.2 share 0.054 | dS_tune +0.32 dS_conf +1.14 dV -0.74
+   w07          S_tune 57.32 (58.67/55.98) S_conf 56.00 V 94.01 L 95.5->98.6 share 0.053 | dS_tune -18.05 dS_conf -16.17 dV -0.18
+FINAL {"lame_T": 2.0, "lame_q": 0.3, "local_context": true, "sizes": [160, 224], "stage_lr": [2, 2, 2, 1, 0.25], "steps": 3}

@@ -37,6 +37,7 @@ Stages and candidates (simplest first):
 The final setting is whatever S7 leaves. It is not revised after a Kaggle score comes back.
 
   python repick.py            # runs (resumable; results in repick_results.jsonl, decisions in repick_log.txt)
+  python repick.py method mixtta_local    # print the same val metrics for a registered method
 """
 import json
 import os
@@ -77,19 +78,24 @@ def log(msg):
 
 
 # ---------------------------------------------------------------- workers (run in subprocesses)
-def work_eval(cfg):
+def evaluate_factory(fac, report_orders=False):
     import numpy as np
     import fe
-    from tta.mixtta_ms import MixTTAMS
     y = fe.data("val")["y"].numpy()
-    fac = lambda model: MixTTAMS(model, **cfg)  # noqa: E731
     per_seed = {s: [] for s in SEEDS}
-    for order in fe.val_orders().values():
+    by_order = {}
+    for name, order in fe.val_orders().items():
+        order_scores = []
         for off in OFFSETS:
             idx = order[off:]
             for s in SEEDS:
                 p = fe.run(fac, "val", idx, seed=s)
-                per_seed[s].append(float((p == y[idx]).mean()))
+                score = float((p == y[idx]).mean())
+                per_seed[s].append(score)
+                order_scores.append(score)
+        if report_orders:
+            by_order[name] = 100 * float(np.mean(order_scores))
+            print(f"{name} {by_order[name]:.2f}%", file=sys.stderr, flush=True)
     allacc = [a for s in SEEDS for a in per_seed[s]]
     idx = np.concatenate(list(fe.val_orders().values()))
     p = fe.run(fac, "val", idx, seed=0)
@@ -97,9 +103,18 @@ def work_eval(cfg):
     first, last = float(ok[:L].mean()), float(ok[-L:].mean())
     share = float(np.bincount(p[-L:], minlength=20).max() / L)
     veto = share > 0.10 or last < first - 0.05
-    append(dict(kind="eval", key=key(cfg), cfg=cfg, V=100 * float(np.mean(allacc)),
-                V_seed={str(s): 100 * float(np.mean(per_seed[s])) for s in SEEDS},
-                L_first=100 * first, L_last=100 * last, L_maxshare=share, veto=bool(veto)))
+    metrics = dict(V=100 * float(np.mean(allacc)),
+                   V_seed={str(s): 100 * float(np.mean(per_seed[s])) for s in SEEDS},
+                   L_first=100 * first, L_last=100 * last, L_maxshare=share, veto=bool(veto))
+    if report_orders:
+        metrics["V_order"] = by_order
+    return metrics
+
+
+def work_eval(cfg):
+    import fe
+    metrics = evaluate_factory(fe.M("mixtta_ms224", **cfg))
+    append(dict(kind="eval", key=key(cfg), cfg=cfg, **metrics))
 
 
 def work_thr(track):
@@ -189,7 +204,11 @@ def main():
 
 
 if __name__ == "__main__":
-    if len(sys.argv) > 2:
+    if len(sys.argv) == 3 and sys.argv[1] == "method":
+        import fe
+        name = sys.argv[2]
+        print(json.dumps(dict(method=name, **evaluate_factory(fe.METHODS[name], report_orders=True)), indent=2))
+    elif len(sys.argv) > 2:
         obj = json.loads(sys.argv[2])
         {"eval": work_eval, "thr": work_thr}[sys.argv[1]](obj)
     else:

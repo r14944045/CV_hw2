@@ -1,0 +1,5 @@
+== round 14 base mixtta_lfsq4 {"lame_T": 2.0, "lame_q": 0.3, "local_context": true, "sizes": [160, 224], "stage_lr": [4, 4, 4, 1, 0.1], "steps": 3}
+   base         S_tune 76.95 (75.87/78.03) S_conf 72.55 V 94.49 L 95.8->98.8 share 0.053 | margin m = 2.16
+   t3a20        S_tune 75.33 (74.02/76.64) S_conf 71.99 V 94.97 L 95.8->99.0 share 0.053 | dS_tune -1.62 dS_conf -0.56 dV +0.48
+   t3a100       S_tune 75.01 (73.66/76.37) S_conf 71.06 V 94.96 L 96.0->98.9 share 0.053 | dS_tune -1.93 dS_conf -1.50 dV +0.47
+FINAL {"lame_T": 2.0, "lame_q": 0.3, "local_context": true, "sizes": [160, 224], "stage_lr": [4, 4, 4, 1, 0.1], "steps": 3}
