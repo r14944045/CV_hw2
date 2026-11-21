@@ -33,9 +33,17 @@ def reproduce_command(config):
 PINNED = ("torch==2.13.0 torchvision==0.28.0 numpy==2.2.6 pandas==2.3.3 pillow==12.2.0 "
           "--extra-index-url https://download.pytorch.org/whl/cu129")
 
+# The same run measured on another GPU, keyed by the packaged file's hash (bf16 kernels differ by GPU generation).
+OTHER_GPU = {
+    "48c04860a92e2eae3ff4b3858876df7bd22d365d25709718c1d490ffb0326dec":
+        "# RTX 3090: 083d2c23ffc3e83ad6a4b54148ea02387d8b76f19e4db6a5c23080a736c4131a; bf16 kernels differ between GPU\n"
+        "# generations, so 88 of 12,288 predictions (0.72 %) differ from the file above\n",
+}
+
 
 def readme(student_id, log, val_log):
     cmd = reproduce_command(log["config"])
+    other = OTHER_GPU.get(log["pred_sha256"], "")
     return f"""# CVPDL HW2 ({student_id}): reproduce `test_pred.csv`
 
 ```bash
@@ -48,7 +56,7 @@ pip install {PINNED}
 {cmd}
 
 # expected: sha256sum ../out/test_pred.csv = {log['pred_sha256']} ({log['gpu']})
-```
+{other}```
 """
 
 

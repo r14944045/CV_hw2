@@ -6,12 +6,12 @@ It would be fine to copy the figure from the referred paper.
 1. Robust Test-Time Adaptation in Dynamic Scenarios (RoTTA, Yuan et al., CVPR 2023). Setting: practical TTA
 
 - Problem addressed:
-  1. continually changing distribution: distribution shift overtime
+  1. continually changing distribution: distribution shift over time
   2. correlative sampling: the data distribution in a batch differs from global distribution
 - Method:
   1. Robust Batch Normalization (RBN): instead of using statistics from the current test batch for normalization, they maintain global mean and variance. During adaptation, these statistics are updated using an exponential moving average (EMA) of statistics computed from samples in the memory bank. Since the memory bank maintains a more balanced representation of the data, normalization becomes less sensitive to class imbalance and correlations within the current batch.
   2. Category-balanced Sampling with Timeliness and Uncertainty (CSTU): maintains a memory bank with an equal memory quota for each category. When a new sample arrives, the teacher model predicts its category and uncertainty, and a heuristic score is calculated based on its age and prediction uncertainty. If replacement is needed, RoTTA selects a candidate from either the most populated category or the incoming sample's category. The candidate is replaced only if its heuristic score is higher than that of the new sample. This favors recent, confident samples while maintaining category balance.
-  3. Training with timeliness: we first calculate the cross entropy between prediction of teacher model and that of student model (which predicts on strong-sugmented samples). Then, the student model updates weights using the loss weighted by timeliness (where newer sample gets larger weight), and the teacher model updates weights using EMA from its own weight and student's weight.
+  3. Training with timeliness: we first calculate the cross entropy between prediction of teacher model and that of student model (which predicts on strong-augmented samples). Then, the student model updates weights using the loss weighted by timeliness (where newer sample gets larger weight), and the teacher model updates weights using EMA from its own weight and student's weight.
 - Pros:
   - Explicitly addresses both continual distribution shifts and non-IID sampling through robust batch normalization and category-balanced memory.
   - Reduces error accumulation using an EMA teacher and timeliness-weighted training.
@@ -28,7 +28,7 @@ It would be fine to copy the figure from the referred paper.
 - Method:
   1. Weight-and-augmentation-averaged pseudo-labels: instead of using only final weights, the teacher model uses weights averaged over training steps to generate pseudo-labels. To further reduce error accumulation, they apply augmentation when domain difference is large. Specifically, they approximate domain difference with confidence score, and apply random augmentations when confidence is low to improve the quality of pseudo-labels.
 
-  2. Stochastic Restoration: apply a mask tensor to restore some of the trainable model weight back to the weight of original pre-trained model. This avoid the model to drift too far from the source model. Compared to RoTTA that only updates BN weights, CoTTA updates all trainable weights, bringing more capacity for adaption.
+  2. Stochastic Restoration: apply a mask tensor to restore some of the trainable model weight back to the weight of original pre-trained model. This keeps the model from drifting too far from the source model. Compared to RoTTA that only updates BN weights, CoTTA updates all trainable weights, bringing more capacity for adaptation.
 
 - Pros:
   - Reduces error accumulation through EMA teacher predictions and augmentation averaging.
@@ -42,7 +42,7 @@ It would be fine to copy the figure from the referred paper.
 
 ## Q2 Method
 
-Final model: `mixtta_lfsq4` (`code/tta/mixtta_ms.py`), Kaggle public **0.94319**, val 95.93 %. Its settings were chosen on val, on ImageNet-C corruptions applied to the val images, and on the public leaderboard. On an RTX 3090 the test stream takes 58.0 s with 3.4 GB peak VRAM (limits: 90 s, 10 GB).
+Final model: `mixtta_lfsq4` (`code/tta/mixtta_ms.py`), Kaggle public **0.94319**, val 95.93 %. Its settings were chosen on val, on ImageNet-C corruptions applied to the val images, and on the public leaderboard. On an RTX 3090 the test stream took 58.0 s and 82.4 s in two runs, with 3.4 GB peak VRAM (limits: 90 s, 10 GB).
 
 - **Model:** the provided ResNet-50 (160 px). Every BN layer becomes a source-mixed BN layer: it normalises with 50 % tracked test statistics and 50 % source statistics. The tracked statistics are an exponential moving average with rate 0.4, one per input size (160 and 224 px).
 - **Input sizes:** the images and the source model are 160 px, and the 224 px input is the same batch upsampled bilinearly, a size chosen on val as the best one tried (92.4 % without self-training, against 89.9 % at 160 px and 91.4 % at 256 px), following FixRes (Touvron et al., NeurIPS 2019), which showed that testing at a higher resolution than the training one improves accuracy.
@@ -105,7 +105,7 @@ The val stream has three properties that break standard TTA, and we assume the t
 - **Source-mixed BN.** The tracked half of the statistics follows the domain, and the source half is an anchor no single batch can move. Against Robust BN this gives +4.3 pt from faster tracking and +2.6 pt from the source mix. On the ImageNet-C suite, slower tracking (0.2) or a heavier source weight (0.7) loses 6–18 pt; faster tracking (0.6) or a lighter source weight (0.3) helps the suite but costs val, so 0.4 and 0.5 stayed.
 - **Update before predicting.** Each batch updates the statistics before it is predicted, so a new domain's first batch is not normalised with the old domain's statistics (+4.4 pt).
 - **Adaptive LAME temperature.** With a fixed T = 2, a confident domain is softened too little and an uncertain one too much, so LAME's neighbour term carries a different weight on each domain. Choosing T per batch so that the mean max-probability is 0.3 equalises it. It gains most on the unseen half of the suite (+1.76 pt).
-- **Prediction averaging.** Flip and shift views add +3.2 pt. The second input size, 224 px, adds +2.1 pt on val and +0.6 on Kaggle.
+- **Prediction averaging.** Flip and shift views add +2.1 pt. Adding the 224 px size, together with T = 2 and 3 steps (`mixtta_ms224`), adds +2.1 pt on val and +0.1 on Kaggle.
 
 **Non-i.i.d. sampling**
 
