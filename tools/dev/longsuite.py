@@ -4,13 +4,13 @@ under a different corruption, so there are no identical repeats. Val images and 
 
 Purpose: a check for components that feed predictions back across batches (local class prior, T3A), which the short
 val-based metrics could not see. Validity test before use: it must place mixtta_r8 (Kaggle 0.82682) far below
-mixtta_repick (0.92675) and mixtta_local_fixed (0.92789).
+mixtta_valsel (0.92675) and mixtta_local_fixed (0.92789).
 
   python longsuite.py name '<json cfg>' [seed]     # appends to longsuite_results.jsonl
 
 Result of the validity test (2026-11-20 ~01:35): NOT valid. Every setting collapses onto one class within a few of the
 compound (val corruption + ImageNet-C severity 3) segments, and the ranking is inverted against Kaggle:
-floor 51.4, repick 36.6, s5 24.7, ms224 23.0, r8 22.8, local_fixed 21.1 (Kaggle 0.912, 0.927, 0.922, 0.916, 0.827,
+floor 51.4, valsel 36.6, s5 24.7, ms224 23.0, r8 22.8, local_fixed 21.1 (Kaggle 0.912, 0.927, 0.922, 0.916, 0.827,
 0.928). It is not used as a check.
 """
 import json

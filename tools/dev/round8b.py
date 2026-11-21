@@ -1,6 +1,6 @@
 """Round 8b: corruption augmentation of the self-training copy (ptta "caug"), judged on unseen corruption types.
 Protocol fixed on 2026-11-19 before any of its runs (written while round 8 was still running). Revised at 23:45 CST,
-still before any of its runs, at the user's request to test caug first: the base is mixtta_repick instead of round 8's
+still before any of its runs, at the user's request to test caug first: the base is mixtta_valsel instead of round 8's
 final setting.
 
 caug: in each self-training step, the randomly shifted training copy of the test batch also gets one ImageNet-C
@@ -9,10 +9,10 @@ blur, zoom blur, brightness, elastic transform; severity 3; jpeg left out as it 
 used; the target is still the LAME output on the uncorrupted views. The set is the mechanical tuning half of the
 published ImageNet-C list (suite.py), not chosen by looking at test images.
 
-Base B8: mixtta_repick (repick_final.json). If round 8 later adopts components, caug is re-checked on top of that
+Base B8: mixtta_valsel (valsel_final.json). If round 8 later adopts components, caug is re-checked on top of that
 combination with the same rule.
 Metrics (round8.py worker): S_conf, the confirmation-half suite score (shot noise, defocus blur, motion blur, snow, fog,
-contrast, pixelate: corruption types caug never trains on); V, the re-pick val metric; L, the long-stream veto. S_tune
+contrast, pixelate: corruption types caug never trains on); V, the valsel.py val metric; L, the long-stream veto. S_tune
 is reported but not used, since caug trains on exactly those corruption types.
 Margin m_c = max(0.3, |S_conf(seed 0) - S_conf(seed 1)|) of B8.
 Rule: caug is adopted if S_conf - S_conf(B8) >= m_c, V >= V(B8) - 0.3 and it is not vetoed. Not revised after a

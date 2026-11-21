@@ -8,7 +8,7 @@ Candidates, each = base + one change:
   dot    DELTA's dynamic online reweighting, momentum 0.95 (Zhao et al., ICLR 2023), a class-balance stabiliser
   lameq3 adaptive LAME temperature, mean max-probability 0.3 (largest gain on unseen corruptions in round 8)
   iabn   NOTE's instance-aware BN, k = 3 (Gong et al., NeurIPS 2022)
-  steps4 4 self-training steps instead of 3 (the best stage-1 score on val in the re-pick, within its margin)
+  steps4 4 self-training steps instead of 3 (the best stage-1 score on val in the val-only selection, valsel.py, within its margin)
 Metrics and rule: exactly as round8.py (suite tuning half, confirmation half, val metric V, long-val veto; margin
 m = max(0.3, seed spread of the base's S_tune); adopt if S_tune gain >= m, S_conf gain > 0, V drop <= 0.3, not
 vetoed; adopted changes are then added one at a time in order of S_tune gain, each re-checked).

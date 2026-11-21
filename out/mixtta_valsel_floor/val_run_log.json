@@ -10,11 +10,11 @@
  "python": "3.10.13",
  "pred_sha256": "235cd935d323d4b2ee8a90a33bf2aca8f155128893953045bb26cc250a645799",
  "config": {
-  "method": "mixtta_repick_floor",
+  "method": "mixtta_valsel_floor",
   "split": "val",
   "data": "../data",
   "ckpt": "../source_resnet50_160.pth",
-  "out": "../out/mixtta_repick_floor",
+  "out": "../out/mixtta_valsel_floor",
   "seed": 0
  },
  "acc": 0.9403409090909091

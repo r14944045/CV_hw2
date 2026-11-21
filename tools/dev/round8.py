@@ -1,4 +1,4 @@
-"""Round 8: published practical-TTA components on top of mixtta_repick, judged on a corruption suite added to val.
+"""Round 8: published practical-TTA components on top of mixtta_valsel, judged on a corruption suite added to val.
 Protocol fixed on 2026-11-19 before any of its runs (the first run started at 22:55 CST).
 
 Why: the test stream, and the private leaderboard in particular, uses corruption types that val does not contain
@@ -9,12 +9,12 @@ mechanical reason; even positions = tuning half, odd = confirmation half). No te
 Metrics (val images and val labels only):
   S_tune: mean accuracy over the 3 tuning-half suite streams x in-batch offsets 0/16/32/48 x seeds 0/1 (24 runs)
   S_conf: the same on the 3 confirmation-half streams
-  V:      the re-pick val metric (7 val orders x 4 offsets x 2 seeds); reused from repick_results.jsonl when the
+  V:      the valsel.py val metric (7 val orders x 4 offsets x 2 seeds); reused from valsel_results.jsonl when the
           setting was already evaluated there
-  L:      the re-pick collapse veto on the long val stream (one class > 10 % at the end, or accuracy -5 pt)
-Margin m = max(0.3, |S_tune(seed 0) - S_tune(seed 1)|) of the base, mixtta_repick (repick_final.json).
+  L:      the valsel.py collapse veto on the long val stream (one class > 10 % at the end, or accuracy -5 pt)
+Margin m = max(0.3, |S_tune(seed 0) - S_tune(seed 1)|) of the base, mixtta_valsel (valsel_final.json).
 
-Sanity check (not a gate): S_tune / S_conf of the four Kaggle-scored val-only settings (floor, ms224, s5, repick),
+Sanity check (not a gate): S_tune / S_conf of the four Kaggle-scored val-only settings (floor, ms224, s5, valsel),
 compared with their Kaggle order (0.91227 < 0.91585 < 0.92220 < 0.92675).
 
 Candidates, each = base + one component with its published defaults (C = 20 classes, entropy margins 0.4 ln C):
@@ -43,17 +43,17 @@ from concurrent.futures import ThreadPoolExecutor
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 RESULTS = os.path.join(HERE, "round8_results.jsonl")
-REPICK = os.path.join(HERE, "repick_results.jsonl")
+VALSEL = os.path.join(HERE, "valsel_results.jsonl")
 LOG = os.path.join(HERE, "round8_log.txt")
 OFFSETS, SEEDS = (0, 16, 32, 48), (0, 1)
 WORKERS = 2
 
-BASE = json.load(open(os.path.join(HERE, "repick_final.json")))
+BASE = json.load(open(os.path.join(HERE, "valsel_final.json")))
 SANITY = {
     "floor": dict(sizes=[160, 224], steps=2, lame_T=1.0),
     "ms224": dict(sizes=[160, 224], steps=3, lame_T=2.0),
     "s5": dict(alpha_min=0.2, lame_T=2.0, shift_thr=9.0, sizes=[160, 224], split_shift=True, steps=3),
-    "repick": BASE,
+    "valsel": BASE,
 }
 CANDIDATES = {
     "eata": dict(ptta=dict(eata=True)),
@@ -115,11 +115,11 @@ def work(cfg):
                     per[s].append(float((p == y[idx]).mean()))
         rec[f"S_{half}"] = 100 * float(np.mean(per[0] + per[1]))
         rec[f"S_{half}_seed"] = {str(s): 100 * float(np.mean(per[s])) for s in SEEDS}
-    prev = load(REPICK).get(key(cfg))
+    prev = load(VALSEL).get(key(cfg))
     if prev is None:
         sys.path.insert(0, HERE)
-        import repick
-        prev = repick.evaluate_factory(fac)
+        import valsel
+        prev = valsel.evaluate_factory(fac)
     for k in ("V", "V_seed", "L_first", "L_last", "L_maxshare", "veto"):
         rec[k] = prev[k]
     with open(RESULTS, "a") as f:
@@ -166,7 +166,7 @@ def main():
     log("== sanity: Kaggle-scored val-only settings (Kaggle 0.91227 / 0.91585 / 0.92220 / 0.92675)")
     for n, r in zip(names, res):
         log(fmt(n, r))
-    base = res[names.index("repick")]
+    base = res[names.index("valsel")]
     m = max(0.3, abs(base["S_tune_seed"]["0"] - base["S_tune_seed"]["1"]))
     log(f"   margin m = {m:.2f}")
     cnames = list(CANDIDATES)

@@ -1,10 +1,10 @@
-# Val-only re-pick: all evaluations
+# Val-only selection: all evaluations
 
-All 35 evaluations of `tools/dev/repick.py`, in the order the stages ran. Each stage starts from the settings kept in the stages before it, and its first row repeats that setting.
+All 35 evaluations of `tools/dev/valsel.py`, in the order the stages ran. Each stage starts from the settings kept in the stages before it, and its first row repeats that setting.
 - **Score:** the mean over the 7 val stream orders × 4 boundary positions × 2 seeds.
 - **Long stream:** the 7 orders back to back. A setting is vetoed if one class takes more than 10 % of the predictions at its end (5 % is balanced), or if accuracy drops by more than 5 pt. No candidate was vetoed.
 - **Stages 2–3:** each tracking setting gets its own shift threshold from the val rule in `tools/dev/threshold_val.py`.
-- **Results:** in `tools/dev/repick_results.jsonl`, with the decision log in `tools/dev/repick_log.txt`.
+- **Results:** in `tools/dev/valsel_results.jsonl`, with the decision log in `tools/dev/valsel_log.txt`.
 
 | Stage | Candidate | Score (%) | Seed 0 / 1 | Max class share, end of long stream (%) | Kept |
 |---|---|---:|---|---:|:---:|

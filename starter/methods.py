@@ -10,7 +10,7 @@ from functools import partial
 
 from tta import BOSA, CoTTA, MixTTA, MixTTAMS, NormOnly, RoTTA, Source
 
-_repick_s5 = partial(MixTTAMS, sizes=(160, 224), steps=3, lame_T=2.0, alpha_min=0.2,
+_valsel_s5 = partial(MixTTAMS, sizes=(160, 224), steps=3, lame_T=2.0, alpha_min=0.2,
                      shift_thr=9.0, split_shift=True)
 
 METHODS = {
@@ -70,14 +70,14 @@ METHODS = {
     # FINAL SUBMISSION: mixtta_lfsq with per-stage rates x(4, 4, 4, 1, 0.1)
     "mixtta_lfsq4": partial(MixTTAMS, local_context=True, stage_lr=(4, 4, 4, 1, 0.1), lame_q=0.3),
 
-    # side branch (report Q3): val-only re-pick with shift reset, running-mean tracking and in-batch split
+    # side branch (report Q3): val-only selection with shift reset, running-mean tracking and in-batch split
     # after stage 5: 3 steps, LAME T 2, rate floor 0.2, val-rule threshold 9.0, in-batch split
-    "mixtta_repick_s5": _repick_s5,
+    "mixtta_valsel_s5": _valsel_s5,
     # + per-stage self-training learning rates x(2, 2, 2, 1, 0.25) (stage 6)
-    "mixtta_repick": partial(MixTTAMS, sizes=(160, 224), steps=3, lame_T=2.0, alpha_min=0.2, shift_thr=9.0,
+    "mixtta_valsel": partial(MixTTAMS, sizes=(160, 224), steps=3, lame_T=2.0, alpha_min=0.2, shift_thr=9.0,
                              split_shift=True, stage_lr=(2, 2, 2, 1, 0.25)),
     # side branch + the local class prior: both collapsed on the public leaderboard (kept for the report's table)
-    "mixtta_local": partial(_repick_s5, local_context=True),
+    "mixtta_local": partial(_valsel_s5, local_context=True),
     "mixtta_r8": partial(MixTTAMS, sizes=(160, 224), steps=3, lame_T=2.0, alpha_min=0.2, shift_thr=9.0,
                          split_shift=True, stage_lr=(2, 2, 2, 1, 0.25), local_context=True),
 }

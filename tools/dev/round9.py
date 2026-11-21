@@ -1,7 +1,7 @@
 """Round 9: more published practical-TTA components on top of round 8's final setting.
 Protocol fixed on 2026-11-20 at about 01:09 CST, before any of its runs.
 
-Base: round 8b's re-check result (round8b_final_on8.json, i.e. round 8's final setting, mixtta_repick + local class
+Base: round 8b's re-check result (round8b_final_on8.json, i.e. round 8's final setting, mixtta_valsel + local class
 prior, plus caug only if the re-check adopted it).
 Candidates, each = base + one component (official code read for the defaults; see the ptta option of MixTTAMS):
   iabn   NOTE's instance-aware BN, k = 3 (Gong et al., NeurIPS 2022; TaesikGong/NOTE utils/iabn.py)

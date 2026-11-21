@@ -10,5 +10,5 @@ Cached tensors go in `tools/dev/cache/` (git-ignored), or in `$HW2_DEV_CACHE` if
 | `segment.py val 3` | Split the val stream into its 3 domains by dynamic programming on early-layer statistics of the source model. Writes `val_bounds.npy` (boundaries at images 776 and 1500) |
 | `fe.py` | Fast evaluator: `val7` (the 7 val stream orders, per-domain accuracy) and `run` |
 | `threshold_val.py` | Chooses the domain-shift threshold `shift_thr` from val only (rule in its docstring) |
-| `repick.py method mixtta_local` | Scores a registered method across all 56 validation runs and applies the 231-batch collapse check. Run `python cache.py` first to build the validation cache. |
+| `valsel.py method mixtta_local` | Scores a registered method across all 56 validation runs and applies the 231-batch collapse check. Run `python cache.py` first to build the validation cache. |
 | `gpu_slot.sh` | Runs a command once one of N GPU slots is free |

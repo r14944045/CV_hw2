@@ -1,4 +1,4 @@
-"""Val-only re-pick of the MixTTA-MS settings. Protocol fixed on 2026-11-19 18:30 CST, before any of its runs.
+"""Val-only selection of the MixTTA-MS settings. Protocol fixed on 2026-11-19 18:30 CST, before any of its runs.
 
 Why: several settings of the Kaggle-best method (mixtta_ms224sp2cprl3) were chosen with help from an analysis of the
 unlabelled test stream outside the harness (offline test segmentation, label-free test checks, a proxy whose
@@ -6,7 +6,7 @@ corruptions were modelled on test images). This script re-chooses them from val 
 from that earlier work; only the selection here is val-only. No test data is read. The test stream is used once, by
 the official harness, for the final setting only.
 
-Fixed, not re-picked (each was chosen on val in the original development):
+Fixed, not re-selected (each was chosen on val in the original development):
   MixTTAMS core: tracking rate alpha 0.4, source weight w 0.5, flip + 2 random shifts, LAME k 5, input sizes
   (160, 224), Adam lr 1e-3 on BN scale/shift, self-training at 160 px, prior pseudo-count 2000, split_min 4.
 
@@ -36,8 +36,8 @@ Stages and candidates (simplest first):
 
 The final setting is whatever S7 leaves. It is not revised after a Kaggle score comes back.
 
-  python repick.py            # runs (resumable; results in repick_results.jsonl, decisions in repick_log.txt)
-  python repick.py method mixtta_local    # print the same val metrics for a registered method
+  python valsel.py            # runs (resumable; results in valsel_results.jsonl, decisions in valsel_log.txt)
+  python valsel.py method mixtta_local    # print the same val metrics for a registered method
 """
 import json
 import os
@@ -46,8 +46,8 @@ import sys
 from concurrent.futures import ThreadPoolExecutor
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-RESULTS = os.path.join(HERE, "repick_results.jsonl")
-LOG = os.path.join(HERE, "repick_log.txt")
+RESULTS = os.path.join(HERE, "valsel_results.jsonl")
+LOG = os.path.join(HERE, "valsel_log.txt")
 OFFSETS, SEEDS = (0, 16, 32, 48), (0, 1)
 WORKERS = 2  # the GPU is shared with other users' jobs
 TRACK_KEYS = ("alpha_min", "split_shift")
@@ -200,7 +200,7 @@ def main():
                      [dict()] + [dict(stage_lr=[e, e, e, l3, l4]) for e in (2, 3, 4) for l3 in (1, 2) for l4 in (0.25, 0.1)], m)
     base, m = select("S7 adaptive LAME temperature", base, [dict()] + [dict(lame_q=q) for q in (0.4, 0.3, 0.2)], m)
     log(f"FINAL {json.dumps(base, sort_keys=True)}")
-    json.dump(base, open(os.path.join(HERE, "repick_final.json"), "w"), indent=1, sort_keys=True)
+    json.dump(base, open(os.path.join(HERE, "valsel_final.json"), "w"), indent=1, sort_keys=True)
 
 
 if __name__ == "__main__":

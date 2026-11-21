@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Submit a harness test run to Kaggle after the format / hash / VRAM / time checks.
-#   bash tools/submit.sh mixtta_repick "val-only re-pick, final"
+#   bash tools/submit.sh mixtta_valsel "val-only selection, final"
 # Needs the Kaggle CLI (pip install kaggle) and an API token in ~/.kaggle/kaggle.json (chmod 600).
 set -euo pipefail
 METHOD=${1:?usage: bash tools/submit.sh <method> "<message>"}

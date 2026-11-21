@@ -1,20 +1,20 @@
 {
  "split": "test",
  "n": 12288,
- "seconds": 89.7,
- "peak_vram_mib": 4150.0,
+ "seconds": 25.1,
+ "peak_vram_mib": 4112.0,
  "vram_ok": true,
- "torch_max_reserved_mib": 3518.0,
+ "torch_max_reserved_mib": 3478.0,
  "gpu": "NVIDIA GeForce RTX 5090",
  "torch": "2.13.0+cu129",
  "python": "3.10.13",
- "pred_sha256": "6448798509e745c085f2319b33c28e3dbd8d741cf7bf9143660d06355fa3c8c1",
+ "pred_sha256": "a6ab4f7074a81a692cef0af7dcc94e5dcaa63cb9b01a1f7d90c747b6e6b58e23",
  "config": {
-  "method": "mixtta_repick_floor",
+  "method": "mixtta_valsel",
   "split": "test",
   "data": "../data",
   "ckpt": "../source_resnet50_160.pth",
-  "out": "../out/mixtta_repick_floor",
+  "out": "../out/mixtta_valsel",
   "seed": 0
  }
 }

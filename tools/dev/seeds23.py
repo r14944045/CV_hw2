@@ -4,7 +4,7 @@ import json, os, sys
 import numpy as np, torch
 import fe
 from tta.mixtta_ms import MixTTAMS
-import repick
+import valsel
 HERE = os.path.dirname(os.path.abspath(__file__))
 name, cfg = sys.argv[1], json.loads(sys.argv[2])
 fac = lambda model: MixTTAMS(model, **cfg)
@@ -20,8 +20,8 @@ for half in ("tune", "conf"):
                 p = fe.run(fac, "val", idx, seed=s, x=X)
                 per[s].append(float((p == y[idx]).mean()))
     rec[f"S_{half}_seed"] = {str(s): 100 * float(np.mean(v)) for s, v in per.items()}
-repick.SEEDS = (2, 3)
-m = repick.evaluate_factory(fac)
+valsel.SEEDS = (2, 3)
+m = valsel.evaluate_factory(fac)
 rec["V_seed"] = m["V_seed"]
 with open(os.path.join(HERE, "seeds23_results.jsonl"), "a") as f:
     f.write(json.dumps(rec) + "\n")

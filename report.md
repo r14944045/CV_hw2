@@ -42,9 +42,10 @@ It would be fine to copy the figure from the referred paper.
 
 ## Q2 Method
 
-Final model: `mixtta_lfsq4` (`code/tta/mixtta_ms.py`), Kaggle public **0.94319**, val 95.93 %. Its settings were chosen on val, on ImageNet-C corruptions applied to the val images, and on the public leaderboard, as the slide-21 FAQ allows. On an RTX 3090 the test stream takes 58.0 s with 3.4 GB peak VRAM (limits: 90 s, 10 GB).
+Final model: `mixtta_lfsq4` (`code/tta/mixtta_ms.py`), Kaggle public **0.94319**, val 95.93 %. Its settings were chosen on val, on ImageNet-C corruptions applied to the val images, and on the public leaderboard. On an RTX 3090 the test stream takes 58.0 s with 3.4 GB peak VRAM (limits: 90 s, 10 GB).
 
 - **Model:** the provided ResNet-50 (160 px). Every BN layer becomes a source-mixed BN layer: it normalises with 50 % tracked test statistics and 50 % source statistics. The tracked statistics are an exponential moving average with rate 0.4, one per input size (160 and 224 px).
+- **Input sizes:** the images and the source model are 160 px, and the 224 px input is the same batch upsampled bilinearly, a size chosen on val as the best one tried (92.4 % without self-training, against 89.9 % at 160 px and 91.4 % at 256 px), following FixRes (Touvron et al., NeurIPS 2019), which showed that testing at a higher resolution than the training one improves accuracy.
 - **Trained parameters and loss:** only the BN scale and shift. The loss is the soft cross-entropy between the target of step 3 and the model's output on a randomly flipped and shifted copy at 160 px. Adam, 3 steps per batch, learning rate 1e-3 scaled per ResNet stage: ×4 for the stem, layer1 and layer2, ×1 for layer3, ×0.1 for layer4.
 
 For each batch of 64:
@@ -56,8 +57,8 @@ For each batch of 64:
 
 **How the settings were chosen:**
 
-1. **Val-only re-pick** (`repick.py`, rules fixed before any run). The score V is the mean accuracy over 7 val stream orders × 4 positions of the domain boundaries in the batch × 2 seeds, and a 231-batch stream (the 7 orders back to back) vetoes collapse. Stage by stage, it kept the simplest setting within 0.3 pt of the best: 3 steps and T = 2 (as in `mixtta_ms224`), shift reset with an in-batch split, and per-stage rates ×(2, 2, 2, 1, 0.25). The result, `mixtta_repick`, scored 0.92675.
-2. **Local class prior** (designed on val). On the re-pick branch it raised V by about 1 pt but collapsed on the public board (0.68554 and 0.82682). On fixed tracking it scored 0.92789, and 0.93815 with the re-pick's per-stage rates (`mixtta_lfs`). Fixed tracking over shift reset was therefore decided on the public leaderboard.
+1. **Val-only selection**. The score V is the mean accuracy over 7 val stream orders × 4 positions of the domain boundaries in the batch × 2 seeds, and a 231-batch stream (the 7 orders back to back) vetoes collapse. Stage by stage, it kept the simplest setting within 0.3 pt of the best: 3 steps and T = 2 (as in `mixtta_ms224`), shift reset with an in-batch split, and per-stage rates ×(2, 2, 2, 1, 0.25). The result, `mixtta_valsel`, scored 0.92675.
+2. **Local class prior**. On the val-only branch it raised V by about 1 pt but collapsed on the public board (0.68554 and 0.82682). On fixed tracking it scored 0.92789, and 0.93815 with the per-stage rates from step 1 (`mixtta_lfs`). Fixed tracking over shift reset was therefore decided on the public leaderboard.
 3. **ImageNet-C suite.** The private board uses other corruption types, so later changes were judged on the 14 ImageNet-C corruptions (Hendrycks & Dietterich, 2019; severity 3), applied to the val images with our own reimplementation. Frost was left out because it needs external photos. The published list was split by position into a tuning and a confirmation half, each with 3 streams. The rule, fixed before each round: adopt a change if it gains at least 0.3 pt on the tuning half (or the seed spread, if larger), gains on the confirmation half, costs at most 0.3 pt of V, and does not collapse on the long stream.
 
 | Round (base) | Change | Tuning half | Confirmation half | V | Kept |
@@ -75,7 +76,7 @@ For each batch of 64:
 
 The val stream has three properties that break standard TTA, and we assume the test stream shares them:
 
-- **Distribution shift:** corruption domains change abruptly, and both val boundaries fall inside a batch. The private leaderboard uses different corruption types from the public one.
+- **Distribution shift:** corruption domains change abruptly, and both val boundaries fall inside a batch.
 - **Non-i.i.d. sampling:** each val batch of 64 holds only 5–17 of the 20 classes, and neighbouring images often share a label.
 - **Length:** the test stream is 192 batches long, and over that many steps self-training can drift.
 
@@ -96,7 +97,7 @@ The val stream has three properties that break standard TTA, and we assume the t
 | + per-stage learning rates ×(2, 2, 2, 1, 0.25) (`mixtta_lfs`) | 95.31 | 0.93815 |
 | + adaptive LAME temperature (`mixtta_lfsq`) | 95.27 | 0.94042 |
 | + per-stage learning rates ×(4, 4, 4, 1, 0.1) (`mixtta_lfsq4`, **final**) | 95.93 | **0.94319** |
-| Side branch of `mixtta_ms224`: shift reset + in-batch split (`mixtta_repick_s5`) / + rates ×(2, 2, 2, 1, 0.25) (`mixtta_repick`) | 94.74 / 95.08 | 0.92220 / 0.92675 |
+| Side branch of `mixtta_ms224`: shift reset + in-batch split (`mixtta_valsel_s5`) / + rates ×(2, 2, 2, 1, 0.25) (`mixtta_valsel`) | 94.74 / 95.08 | 0.92220 / 0.92675 |
 | Side branch + local class prior (`mixtta_local` / `mixtta_r8`), collapsed | 96.07 / 96.69 | 0.68554 / 0.82682 |
 
 **Distribution shift**
@@ -122,7 +123,7 @@ The val stream has three properties that break standard TTA, and we assume the t
 
 - **From our own method:**
   - shift detection with reset and an in-batch split (alone: +0.40 and +0.39 pt on V, Kaggle 0.91585 → 0.92220; unsafe with the local prior);
-  - a second pass on a domain's first batches and a global class prior (within the re-pick margin);
+  - a second pass on a domain's first batches and a global class prior (within the 0.3 pt selection margin);
   - 4 self-training steps (−0.51 on the confirmation half);
   - T3A's prototype classifier (+0.48 on V, but −1.62 / −0.56 on the suite).
 - **Published components on the suite, with their official defaults:**
@@ -150,6 +151,6 @@ The val stream has three properties that break standard TTA, and we assume the t
 - **#828, golden retriever → red fox.** The warp stretches the dog's head into a narrow, pointed shape, and its orange coat against a forest matches a fox.
 - **#1990, steam locomotive → mountain bike.** The fisheye shrinks the train to a small object on a track through fields, seen from above, a scene closer to a bike trail.
 
-**Error distribution.** The errors are spread over the val domains: 30 of 776 (scan-line grid), 31 of 724 (wavy warp) and 25 of 612 (fisheye). Against `mixtta_repick` (104 errors), 38 errors were fixed and 20 introduced, most of the gain on the scan-line grid (43 → 30). The most-missed classes are sports car (16) and timber wolf (15). The most frequent confusions are timber wolf ↔ Siberian husky (8), laptop ↔ sports car (7), and timber wolf → red fox and tabby → timber wolf (3 each).
+**Error distribution.** The errors are spread over the val domains: 30 of 776 (scan-line grid), 31 of 724 (wavy warp) and 25 of 612 (fisheye). Against `mixtta_valsel` (104 errors), 38 errors were fixed and 20 introduced, most of the gain on the scan-line grid (43 → 30). The most-missed classes are sports car (16) and timber wolf (15). The most frequent confusions are timber wolf ↔ Siberian husky (8), laptop ↔ sports car (7), and timber wolf → red fox and tabby → timber wolf (3 each).
 
-**References and code sources.** RoTTA: Yuan, Xie and Li, CVPR 2023. CoTTA: Wang, Fink, Van Gool and Dai, CVPR 2022. LAME: Boudiaf, Mueller, Ben Ayed and Bertinetto, CVPR 2022. BOSA: Bai et al., IJCAI 2026 (no official code; implemented from the paper). ImageNet-C: Hendrycks and Dietterich, ICLR 2019. Code adapted from official implementations, also cited in the code: `tta/rotta.py` (github.com/BIT-DA/RoTTA), `tta/cotta.py` and `tta/augment.py` (github.com/qinenergy/cotta), `tta/lame.py` (github.com/fiveai/LAME); the ImageNet-C corruptions follow `make_imagenet_c.py` (github.com/hendrycks/robustness).
+**References and code sources.** RoTTA: Yuan, Xie and Li, CVPR 2023. CoTTA: Wang, Fink, Van Gool and Dai, CVPR 2022. LAME: Boudiaf, Mueller, Ben Ayed and Bertinetto, CVPR 2022. BOSA: Bai et al., IJCAI 2026 (no official code; implemented from the paper). ImageNet-C: Hendrycks and Dietterich, ICLR 2019. FixRes: Touvron, Vedaldi, Douze and Jégou, "Fixing the train-test resolution discrepancy", NeurIPS 2019. Code adapted from official implementations, also cited in the code: `tta/rotta.py` (github.com/BIT-DA/RoTTA), `tta/cotta.py` and `tta/augment.py` (github.com/qinenergy/cotta), `tta/lame.py` (github.com/fiveai/LAME); the ImageNet-C corruptions follow `make_imagenet_c.py` (github.com/hendrycks/robustness).

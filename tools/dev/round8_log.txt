@@ -2,7 +2,7 @@
    floor        S_tune 72.33 (72.49/72.18) S_conf 69.80 V 92.70 L 94.3->97.4 share 0.055
    ms224        S_tune 72.27 (72.26/72.28) S_conf 68.14 V 93.12 L 93.8->97.0 share 0.054
    s5           S_tune 73.14 (73.05/73.22) S_conf 71.14 V 93.91 L 94.6->97.4 share 0.051
-   repick       S_tune 74.99 (75.17/74.82) S_conf 72.30 V 94.16 L 95.1->97.4 share 0.052
+   valsel       S_tune 74.99 (75.17/74.82) S_conf 72.30 V 94.16 L 95.1->97.4 share 0.052
    margin m = 0.35
 == candidates (base + one component)
    eata         S_tune 71.22 (71.06/71.39) S_conf 71.49 V 92.44 L 92.8->92.4 share 0.064 | dS_tune -3.77 dS_conf -0.81 dV -1.72

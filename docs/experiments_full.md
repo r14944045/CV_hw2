@@ -43,11 +43,11 @@ Moved out of report.md to keep the report within the 6-page limit.
 | `mixtta_st2` | `mixtta_st` with 2 steps per batch | 91.90 | +37.35 | 6.7 | 3798 | 0.91 |
 | **MixTTA-MS** (ours) | | | | | | |
 | `mixtta_ms224` | `mixtta_st2` at input sizes 160 and 224, each with its own BN statistics, averaged; flip + 2 shifts per size, LAME on T = 2-softened probabilities, 3 Adam steps per batch at 160; bf16, deterministic cuDNN | 93.99 | +39.44 | 4.8 | 4150 | 0.91585 |
-| `mixtta_repick_floor` | 2 Adam steps and T = 1 instead of 3 and 2 (interim val-only submission) | 94.03 | +39.48 | — | 4150 | 0.91227 |
-| `mixtta_repick_s5` | + shift detection (threshold 9.0 from the val rule) with reset, running-mean statistics floored at 0.2, in-batch split at a changepoint (step 0) | 94.74 | +40.19 | — | 4090 | 0.92220 |
-| `mixtta_repick` | + per-stage self-training learning rates ×(2, 2, 2, 1, 0.25) for stem, layer1–layer4 (stage 6) | 95.08 | +40.53 | 4.7 | 4090 | 0.92675 |
+| `mixtta_valsel_floor` | 2 Adam steps and T = 1 instead of 3 and 2 (interim val-only submission) | 94.03 | +39.48 | — | 4150 | 0.91227 |
+| `mixtta_valsel_s5` | + shift detection (threshold 9.0 from the val rule) with reset, running-mean statistics floored at 0.2, in-batch split at a changepoint (step 0) | 94.74 | +40.19 | — | 4090 | 0.92220 |
+| `mixtta_valsel` | + per-stage self-training learning rates ×(2, 2, 2, 1, 0.25) for stem, layer1–layer4 (stage 6) | 95.08 | +40.53 | 4.7 | 4090 | 0.92675 |
 | `mixtta_local` | Stage 5 with a local class prior for prediction and self-training. Collapsed on the public board | 96.07 | +41.52 | 17.0 | 4090 | 0.68554 |
-| `mixtta_r8` | `mixtta_repick` + the local class prior. Collapsed on the public board | 96.69 | +42.14 | 14.8 | 4090 | 0.82682 |
+| `mixtta_r8` | `mixtta_valsel` + the local class prior. Collapsed on the public board | 96.69 | +42.14 | 14.8 | 4090 | 0.82682 |
 | **Final branch** (fixed tracking) | | | | | | |
 | `mixtta_local_fixed` | Fixed-tracking `mixtta_ms224` with the same local class prior | 95.12 | +40.58 | 15.1 | 4148 | 0.92789 |
 | `mixtta_lfs` | + per-stage self-training learning rates ×(2, 2, 2, 1, 0.25) | 95.31 | +40.76 | 10.3 | 4150 | 0.93815 |
@@ -58,14 +58,14 @@ Val times were measured on a shared RTX 5090, so they vary with load. The ImageN
 
 | Round (base) | Candidate | Tuning half | Confirmation half | V | Decision |
 |---|---|---:|---:|---:|---|
-| 8 (`mixtta_repick`, margin 0.35) | local class prior | +1.12 | +1.89 | +1.08 | adopted; collapsed on Kaggle (`mixtta_r8`) |
+| 8 (`mixtta_valsel`, margin 0.35) | local class prior | +1.12 | +1.89 | +1.08 | adopted; collapsed on Kaggle (`mixtta_r8`) |
 | 8 | second pass on 2 batches | +0.51 | +0.39 | +0.19 | passed; dropped in the combination |
 | 8 | adaptive LAME temperature 0.3 | −0.17 | +1.14 | +0.15 | no |
 | 8 | DELTA reweighting | +0.16 | +0.17 | +0.05 | no |
 | 8 | EATA filtering | −3.77 | −0.81 | −1.72 | no |
 | 8 | ROID weights / weight ensembling / prior correction | −1.20 / −1.38 / −0.93 | −0.54 / −0.40 / −0.99 | −0.61 / −0.03 / −1.79 | no |
 | 8 | SAR recovery | ±0 (never triggered) | ±0 | ±0 | no |
-| 8b (`mixtta_repick`) | ImageNet-C augmentation of the self-training copy | −1.97 | −0.20 | −0.74 | no |
+| 8b (`mixtta_valsel`) | ImageNet-C augmentation of the self-training copy | −1.97 | −0.20 | −0.74 | no |
 | 10 (`mixtta_lfs`) | adaptive LAME temperature 0.3 | +0.67 | +1.76 | −0.21 | **adopted** |
 | 10 | DELTA reweighting | +0.18 | +0.11 | −0.01 | no |
 | 10 | 4 self-training steps | +0.77 | −0.51 | +0.28 | no |
